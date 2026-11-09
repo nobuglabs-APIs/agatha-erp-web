@@ -3,7 +3,7 @@ import type { TokenResponse } from './types';
 const configuredApiBaseUrl = import.meta.env.VITE_AGATHA_API_BASE_URL;
 const useLocalDevProxy = import.meta.env.DEV
   && (!configuredApiBaseUrl || /^https?:\/\/(localhost|127\.0\.0\.1):8080\/api\/v1\/?$/i.test(configuredApiBaseUrl));
-const apiBaseUrl = (useLocalDevProxy
+const apiBaseUrl = (import.meta.env.PROD || useLocalDevProxy
   ? '/api/v1'
   : configuredApiBaseUrl || 'http://localhost:8080/api/v1')
   .replace(/\/+$/, '');
