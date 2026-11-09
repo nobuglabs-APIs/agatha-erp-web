@@ -1,18 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ApiError, clearTokens, hasSession, logoutSession, request } from './api/client';
-import type { Company, Page, UserProfile } from './api/types';
+import type { UserProfile } from './api/types';
 import { AuthScreen } from './components/AuthScreen';
 import { Brand } from './components/Brand';
 import { CompanyWorkspace } from './components/CompanyWorkspace';
-import { PlatformWorkspace } from './components/PlatformWorkspace';
-
-type AppMode = 'company' | 'platform';
+import { Icon } from './components/Icon';
 
 export default function App() {
   const [authenticated, setAuthenticated] = useState(hasSession());
   const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
-  const [mode, setMode] = useState<AppMode>('company');
   const [selectedCompanyId, setSelectedCompanyId] = useState('');
   const [loading, setLoading] = useState(hasSession());
   const [error, setError] = useState('');
@@ -23,15 +19,6 @@ export default function App() {
     try {
       const current = await request<UserProfile>('/auth/me');
       setProfile(current);
-      let platformAdmin = false;
-      try {
-        await request<Page<Company>>('/platform/companies?page=1&per_page=1');
-        platformAdmin = true;
-      } catch (reason) {
-        if (!(reason instanceof ApiError) || reason.status !== 403) throw reason;
-      }
-      setIsPlatformAdmin(platformAdmin);
-      setMode(platformAdmin ? 'platform' : 'company');
       const rememberedCompany = sessionStorage.getItem('agatha_company_id');
       const nextCompanyId = current.companies.some((item) => item.company_id === rememberedCompany)
         ? rememberedCompany || ''
@@ -82,19 +69,10 @@ export default function App() {
   }
   if (!profile) return <AuthScreen onAuthenticated={() => setAuthenticated(true)} />;
 
-  const canViewCompany = profile.companies.length > 0;
-  const activeMode = mode === 'platform' && isPlatformAdmin ? 'platform' : 'company';
-
   return (
     <div className="app-frame">
       <header className="topbar">
         <Brand compact />
-        {isPlatformAdmin && (
-          <div className="mode-switch" role="group" aria-label="Área de trabalho">
-            <button className={activeMode === 'company' ? 'mode-switch__active' : ''} onClick={() => setMode('company')} type="button">Empresa</button>
-            <button className={activeMode === 'platform' ? 'mode-switch__active' : ''} onClick={() => setMode('platform')} type="button">Plataforma</button>
-          </div>
-        )}
         <div className="topbar__account">
           <span className="avatar">{profile.full_name.slice(0, 1).toUpperCase()}</span>
           <span className="topbar__identity"><strong>{profile.full_name}</strong><small>{profile.email}</small></span>
@@ -102,26 +80,22 @@ export default function App() {
         </div>
       </header>
       {error && <div className="app-global-error" role="alert"><span>{error}</span><button type="button" onClick={() => void loadSession()}>Tentar novamente</button></div>}
-      {activeMode === 'platform' ? (
-        <PlatformWorkspace />
-      ) : canViewCompany ? (
+      {profile.companies.length > 0 ? (
         <CompanyWorkspace
           profile={profile}
           selectedCompanyId={selectedCompanyId}
           onCompanyChange={chooseCompany}
           onLogout={() => void logout()}
-          isPlatformAdmin={isPlatformAdmin}
-          onOpenPlatform={() => setMode('platform')}
         />
       ) : (
         <main className="empty-company">
-          <span className="empty-company__icon">＋</span>
+          <span className="empty-company__icon"><Icon name="plus" size={22} /></span>
           <span className="eyebrow">O SEU ESPAÇO</span>
           <h1>Registe uma empresa para começar</h1>
           <p>Esta conta ainda não está ligada a uma empresa. Termine a sessão e use “Registar empresa” para criar o primeiro espaço.</p>
         </main>
       )}
-      <footer className="app-footer">Agatha ERP <span>·</span> Todos os direitos reservados · Nobug Labs</footer>
+      <footer className="app-footer">Ágata ERP <span>·</span> Todos os direitos reservados · Nobug Labs</footer>
     </div>
   );
 }

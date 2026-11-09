@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { request } from '../api/client';
 import type { CompanyFeatures, Membership, UserProfile } from '../api/types';
 import { Brand } from './Brand';
+import { Icon, type IconName } from './Icon';
 import { CashRegisterPage } from './operations/CashRegisterPage';
 import { CustomersPage } from './operations/CustomersPage';
 import { DashboardPage } from './operations/DashboardPage';
@@ -20,24 +21,24 @@ import { StockPage } from './operations/StockPage';
 
 type View = string;
 
-const coreNavigation: Array<{ id: View; label: string; icon: string; module: string }> = [
-  { id: 'overview', label: 'Visão geral', icon: '⌂', module: 'reports' },
-  { id: 'sales', label: 'Vendas', icon: '↗', module: 'sales' },
-  { id: 'documents', label: 'Faturas', icon: '▧', module: 'sales' },
-  { id: 'receivables', label: 'A receber', icon: '₭', module: 'sales' },
-  { id: 'purchases', label: 'Compras', icon: '↙', module: 'purchases' },
-  { id: 'cash', label: 'Caixa', icon: '▣', module: 'sales' },
-  { id: 'products', label: 'Produtos', icon: '▦', module: 'inventory' },
-  { id: 'customers', label: 'Clientes', icon: '♙', module: 'customers' },
-  { id: 'stock', label: 'Stock', icon: '▤', module: 'inventory' },
+const coreNavigation: Array<{ id: View; label: string; icon: IconName; module: string }> = [
+  { id: 'overview', label: 'Visão geral', icon: 'home', module: 'reports' },
+  { id: 'sales', label: 'Vendas', icon: 'trend', module: 'sales' },
+  { id: 'documents', label: 'Faturas', icon: 'invoice', module: 'sales' },
+  { id: 'receivables', label: 'A receber', icon: 'wallet', module: 'sales' },
+  { id: 'purchases', label: 'Compras', icon: 'bag', module: 'purchases' },
+  { id: 'cash', label: 'Caixa', icon: 'banknote', module: 'sales' },
+  { id: 'products', label: 'Produtos', icon: 'package', module: 'inventory' },
+  { id: 'customers', label: 'Clientes', icon: 'users', module: 'customers' },
+  { id: 'stock', label: 'Stock', icon: 'layers', module: 'inventory' },
 ];
 
-const verticalIcons: Record<string, string> = {
-  commerce: '▣',
-  restaurant: '♨',
-  barbershop: '✂',
-  pharmacy: '+',
-  hospitality: '⌂',
+const verticalIcons: Record<string, IconName> = {
+  commerce: 'store',
+  restaurant: 'utensils',
+  barbershop: 'scissors',
+  pharmacy: 'pill',
+  hospitality: 'bed',
 };
 
 export function OperationalWorkspace({
@@ -47,8 +48,6 @@ export function OperationalWorkspace({
   onLogout,
   memberships,
   onCompanyChange,
-  isPlatformAdmin,
-  onOpenPlatform,
   defaultView,
   billingOnly,
   onSubscriptionChange,
@@ -59,8 +58,6 @@ export function OperationalWorkspace({
   onLogout: () => void;
   memberships: Membership[];
   onCompanyChange: (id: string) => void;
-  isPlatformAdmin: boolean;
-  onOpenPlatform: () => void;
   defaultView: View;
   billingOnly: boolean;
   onSubscriptionChange: () => void;
@@ -69,6 +66,7 @@ export function OperationalWorkspace({
   const [refreshKey, setRefreshKey] = useState(0);
   const [features, setFeatures] = useState<CompanyFeatures | null>(null);
   const [featuresError, setFeaturesError] = useState('');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const canManageBilling = Boolean(profile.companies.find((item) => item.company_id === companyId)?.is_admin);
 
   useEffect(() => {
@@ -89,7 +87,7 @@ export function OperationalWorkspace({
   }, [billingOnly, companyId, defaultView]);
 
   const navigation = useMemo(() => billingOnly
-    ? [{ id: 'billing', label: 'Plano e teste', icon: '◷', module: '' }]
+    ? [{ id: 'billing', label: 'Plano e teste', icon: 'card' as IconName, module: '' }]
     : [
       ...(features
         ? coreNavigation.filter((item) => features.core_modules.includes(item.module))
@@ -97,9 +95,9 @@ export function OperationalWorkspace({
       ...(features?.packs.filter((pack) => pack.enabled && pack.is_primary).map((pack) => ({
         id: `industry:${pack.code}`,
         label: pack.name,
-        icon: verticalIcons[pack.code] || '◇',
+        icon: verticalIcons[pack.code] || ('spark' as IconName),
       })) || []),
-      ...(canManageBilling ? [{ id: 'billing', label: 'Plano e teste', icon: '◷', module: '' }] : []),
+      ...(canManageBilling ? [{ id: 'billing', label: 'Plano e teste', icon: 'card' as IconName, module: '' }] : []),
     ], [billingOnly, canManageBilling, features]);
 
   useEffect(() => {
@@ -108,9 +106,39 @@ export function OperationalWorkspace({
     }
   }, [features, navigation, view]);
 
+  useEffect(() => {
+    if (!mobileMenuOpen) {
+      return;
+    }
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const media = window.matchMedia('(max-width: 780px)');
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setMobileMenuOpen(false);
+      }
+    }
+    function handleViewportChange() {
+      if (!media.matches) {
+        setMobileMenuOpen(false);
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    media.addEventListener('change', handleViewportChange);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+      media.removeEventListener('change', handleViewportChange);
+    };
+  }, [mobileMenuOpen]);
+
+  const mobilePrimaryNavigation = navigation.slice(0, 4);
+  const mobileMenuActive = mobileMenuOpen || !mobilePrimaryNavigation.some((item) => item.id === view);
+
   function navigate(next: string) {
     setView(next);
     setRefreshKey((key) => key + 1);
+    setMobileMenuOpen(false);
   }
 
   return (
@@ -135,20 +163,19 @@ export function OperationalWorkspace({
           <span className="ops-nav__caption">ESPAÇO DE TRABALHO</span>
           {navigation.map((item) => (
             <button type="button" className={view === item.id ? 'ops-nav__item ops-nav__item--active' : 'ops-nav__item'} key={item.id} onClick={() => navigate(item.id)}>
-              <span className="ops-nav__icon" aria-hidden="true">{item.icon}</span>
+              <span className="ops-nav__icon" aria-hidden="true"><Icon name={item.icon} /></span>
               <span>{item.label}</span>
               {item.id === 'sales' && <span className="ops-nav__shortcut">POS</span>}
             </button>
           ))}
         </nav>
         <div className="ops-sidebar__bottom">
-          {isPlatformAdmin && <button type="button" className="ops-signout ops-platform-link" onClick={onOpenPlatform}>⌘ <span>Administração Nobug Labs</span></button>}
           <div className="ops-user">
             <span className="avatar">{profile.full_name.slice(0, 1).toUpperCase()}</span>
             <span><strong>{profile.full_name}</strong><small>{profile.email}</small></span>
           </div>
-          <button type="button" className="ops-signout" onClick={onLogout}>↪ <span>Terminar sessão</span></button>
-          <small className="ops-sidebar__copyright">Agatha ERP · Nobug Labs</small>
+          <button type="button" className="ops-signout" onClick={onLogout}><Icon name="logout" size={15} /> <span>Terminar sessão</span></button>
+          <small className="ops-sidebar__copyright">Ágata ERP · Nobug Labs</small>
         </div>
       </aside>
       <main className="ops-main">
@@ -157,7 +184,6 @@ export function OperationalWorkspace({
           <div className="ops-breadcrumb"><span>Empresa</span><b>/</b><strong>{navigation.find((item) => item.id === view)?.label}</strong></div>
           <div className="ops-topbar__right">
             <span className="ops-live"><i /> {billingOnly ? 'Gestão da subscrição' : 'Sistema operacional'}</span>
-            {isPlatformAdmin && <button type="button" className="ops-admin-shortcut" onClick={onOpenPlatform}>Plataforma</button>}
             <span className="avatar">{profile.full_name.slice(0, 1).toUpperCase()}</span>
           </div>
         </header>
@@ -179,15 +205,52 @@ export function OperationalWorkspace({
           {view === 'industry:pharmacy' && <PharmacyPage key={`pharmacy-${refreshKey}`} companyId={companyId} />}
           {view === 'industry:hospitality' && <HospitalityPage key={`hospitality-${refreshKey}`} companyId={companyId} />}
         </div>
-        <footer className="ops-footer">Agatha ERP <span>·</span> Todos os direitos reservados · Nobug Labs</footer>
+        <footer className="ops-footer">Ágata ERP <span>·</span> Todos os direitos reservados · Nobug Labs</footer>
       </main>
       <nav className="ops-mobile-nav" aria-label="Navegação">
-        {navigation.map((item) => (
+        {mobilePrimaryNavigation.map((item) => (
           <button type="button" className={view === item.id ? 'ops-mobile-nav__item ops-mobile-nav__item--active' : 'ops-mobile-nav__item'} key={item.id} onClick={() => navigate(item.id)}>
-            <span aria-hidden="true">{item.icon}</span><small>{item.id === 'overview' ? 'Início' : item.label}</small>
+            <span aria-hidden="true"><Icon name={item.icon} size={19} /></span><small>{item.id === 'overview' ? 'Início' : item.label}</small>
           </button>
         ))}
+        <button type="button" className={mobileMenuActive ? 'ops-mobile-nav__item ops-mobile-nav__item--active' : 'ops-mobile-nav__item'} onClick={() => setMobileMenuOpen(true)} aria-haspopup="dialog" aria-expanded={mobileMenuOpen}>
+          <span aria-hidden="true"><Icon name="grid" size={19} /></span><small>Mais</small>
+        </button>
       </nav>
+      {mobileMenuOpen && (
+        <div className="ops-sheet-layer">
+          <button type="button" className="ops-sheet-backdrop" aria-label="Fechar menu" onClick={() => setMobileMenuOpen(false)} />
+          <div className="ops-sheet" role="dialog" aria-modal="true" aria-label="Menu de navegação">
+            <span className="ops-sheet__handle" aria-hidden="true" />
+            <div className="ops-sheet__head">
+              <div>
+                <small>NAVEGAÇÃO</small>
+                <strong>{companyName}</strong>
+              </div>
+              <button type="button" className="ops-icon-button" onClick={() => setMobileMenuOpen(false)} aria-label="Fechar menu"><Icon name="close" size={15} /></button>
+            </div>
+            {memberships.length > 1 && (
+              <label className="ops-sheet__company">
+                <small>EMPRESA ATIVA</small>
+                <select aria-label="Empresa ativa" value={companyId} onChange={(event) => { setMobileMenuOpen(false); onCompanyChange(event.target.value); }}>
+                  {memberships.map((membership) => <option value={membership.company_id} key={membership.company_id}>{membership.company_name}</option>)}
+                </select>
+              </label>
+            )}
+            <div className="ops-sheet__grid">
+              {navigation.map((item) => (
+                <button type="button" className={view === item.id ? 'ops-sheet__item ops-sheet__item--active' : 'ops-sheet__item'} key={item.id} onClick={() => navigate(item.id)}>
+                  <span aria-hidden="true"><Icon name={item.icon} size={18} /></span>
+                  <small>{item.label}</small>
+                </button>
+              ))}
+            </div>
+            <div className="ops-sheet__actions">
+              <button type="button" className="ops-sheet__action ops-sheet__action--danger" onClick={() => { setMobileMenuOpen(false); onLogout(); }}><Icon name="logout" size={16} /><span>Terminar sessão</span></button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

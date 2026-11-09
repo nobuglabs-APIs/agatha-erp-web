@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { ApiError, request, saveTokens } from '../api/client';
 import type { CompanyInput, TokenResponse } from '../api/types';
 import { Brand } from './Brand';
+import { Icon, type IconName } from './Icon';
 
 interface RegisterResponse {
   company_id: string;
@@ -9,13 +10,13 @@ interface RegisterResponse {
   tokens: TokenResponse;
 }
 
-const businessTypes = [
-  { code: 'commerce', name: 'Comércio', description: 'Vendas rápidas, stock, promoções e devoluções.', icon: '▣' },
-  { code: 'restaurant', name: 'Restaurante', description: 'Mesas, pedidos, cozinha e contas.', icon: '♨' },
-  { code: 'barbershop', name: 'Barbearia', description: 'Agenda, profissionais, serviços e comissões.', icon: '✂' },
-  { code: 'pharmacy', name: 'Farmácia', description: 'Lotes, validade, prescrições e dispensa.', icon: '+' },
-  { code: 'hospitality', name: 'Hotelaria', description: 'Quartos, reservas, estadias e limpeza.', icon: '⌂' },
-] as const;
+const businessTypes: ReadonlyArray<{ code: string; name: string; description: string; icon: IconName }> = [
+  { code: 'commerce', name: 'Comércio', description: 'Vendas rápidas, stock, promoções e devoluções.', icon: 'store' },
+  { code: 'restaurant', name: 'Restaurante', description: 'Mesas, pedidos, cozinha e contas.', icon: 'utensils' },
+  { code: 'barbershop', name: 'Barbearia', description: 'Agenda, profissionais, serviços e comissões.', icon: 'scissors' },
+  { code: 'pharmacy', name: 'Farmácia', description: 'Lotes, validade, prescrições e dispensa.', icon: 'pill' },
+  { code: 'hospitality', name: 'Hotelaria', description: 'Quartos, reservas, estadias e limpeza.', icon: 'bed' },
+];
 
 export function AuthScreen({
   onAuthenticated,
@@ -30,6 +31,10 @@ export function AuthScreen({
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [industryCode, setIndustryCode] = useState('');
+  const [referralCode] = useState(() => {
+    const code = new URLSearchParams(window.location.search).get('ref');
+    return code?.trim().toUpperCase() || '';
+  });
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -69,6 +74,7 @@ export function AuthScreen({
           body: {
             company,
             industry_code: industryCode,
+            ...(referralCode ? { referral_code: referralCode } : {}),
             admin: {
               full_name: String(data.get('full_name') || '').trim(),
               email: String(data.get('admin_email') || '').trim(),
@@ -94,6 +100,22 @@ export function AuthScreen({
           <span className="eyebrow">GESTÃO QUE ACOMPANHA O SEU RITMO</span>
           <h1>Mais clareza para fazer o seu negócio crescer.</h1>
           <p>Operações, equipa e informação da empresa num só lugar — simples de entender e pronto para o dia a dia.</p>
+          <ul className="auth-story__features">
+            <li><Icon name="shield" size={15} /> Aprovado para operar em Angola</li>
+            <li><Icon name="trend" size={15} /> Vendas, stock e faturação</li>
+            <li><Icon name="users" size={15} /> Equipa com permissões</li>
+          </ul>
+          <div className="story-showcase">
+            <div className="story-showcase__head">
+              <span className="story-showcase__mark"><img src="/brand/agata-mark.png" alt="" /></span>
+              <span className="story-showcase__copy"><strong>Um espaço, toda a operação.</strong><small>Do onboarding à fatura, sem saltar entre ferramentas.</small></span>
+            </div>
+            <div className="story-showcase__stats">
+              <div><strong>7 dias</strong><small>TESTE GRÁTIS</small></div>
+              <div><strong>1</strong><small>ESPAÇO</small></div>
+              <div><strong>0</strong><small>COMPLICAÇÕES</small></div>
+            </div>
+          </div>
         </div>
         <div className="story-foot">
           <span className="story-foot__spark">✳</span>
@@ -107,7 +129,7 @@ export function AuthScreen({
           <div className="auth-heading">
             <span className="eyebrow">{mode === 'login' ? 'BEM-VINDO DE VOLTA' : 'COMECE AQUI'}</span>
             <h2>{mode === 'login' ? 'Entre na sua conta' : 'Registe a sua empresa'}</h2>
-            <p>{mode === 'login' ? 'Aceda ao seu espaço Agatha ERP.' : 'Crie a conta de administrador e inicie o onboarding.'}</p>
+            <p>{mode === 'login' ? 'Aceda ao seu espaço Ágata ERP.' : 'Crie a conta de administrador e inicie o onboarding.'}</p>
           </div>
 
           <form className="auth-form" key={mode} onSubmit={submit}>
@@ -138,13 +160,14 @@ export function AuthScreen({
                           checked={industryCode === type.code}
                           onChange={() => setIndustryCode(type.code)}
                         />
-                        <span className="business-type-card__icon" aria-hidden="true">{type.icon}</span>
+                        <span className="business-type-card__icon" aria-hidden="true"><Icon name={type.icon} size={17} /></span>
                         <span className="business-type-card__copy"><strong>{type.name}</strong><small>{type.description}</small></span>
                         <span className="business-type-card__check" aria-hidden="true">✓</span>
                       </label>
                     ))}
                   </div>
                 </fieldset>
+                {referralCode && <p className="field-hint">Indicação Nobug Rewards aplicada: <strong>{referralCode}</strong></p>}
                 <label className="field">
                   <span>Nome legal da empresa</span>
                   <input name="legal_name" required minLength={2} maxLength={200} placeholder="Ex.: Empresa, Lda." />
@@ -177,7 +200,7 @@ export function AuthScreen({
 
             {error && <div className="alert alert--error" role="alert">{error}</div>}
             <button className="button button--primary button--large" type="submit" disabled={busy}>
-              {busy ? 'A processar…' : mode === 'login' ? 'Entrar no Agatha' : 'Criar conta e empresa'}
+              {busy ? 'A processar…' : mode === 'login' ? 'Entrar na Ágata' : 'Criar conta e empresa'}
               <span aria-hidden="true">→</span>
             </button>
           </form>

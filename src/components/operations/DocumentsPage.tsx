@@ -3,6 +3,7 @@ import { request, requestBlob } from '../../api/client';
 import type { Page } from '../../api/types';
 import type { Customer, Product } from './shared';
 import { getErrorMessage, listPage, money } from './shared';
+import { DocumentSheet } from './DocumentSheet';
 
 interface SalesDocument {
   id: string;
@@ -32,28 +33,22 @@ function documentDate(value: string | null): string {
   return new Date(`${value.slice(0, 10)}T12:00:00`).toLocaleDateString('pt-AO');
 }
 
-function localDateInputValue(): string {
-  const date = new Date();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${date.getFullYear()}-${month}-${day}`;
-}
-
 export function DocumentsPage({ companyId }: { companyId: string }) {
   const [documents, setDocuments] = useState<SalesDocument[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState('');
   const [quantities, setQuantities] = useState<Record<string, number>>({});
-  const [issueDate, setIssueDate] = useState(localDateInputValue);
   const [dueDate, setDueDate] = useState('');
   const [notes, setNotes] = useState('');
+  const [productSearch, setProductSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [formDataLoading, setFormDataLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [sheetDocumentId, setSheetDocumentId] = useState<string | null>(null);
 
   const loadDocuments = useCallback(async () => {
     setLoading(true);
@@ -93,6 +88,12 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
   }
 
   function openForm() {
+    setSelectedCustomerId('');
+    setQuantities({});
+    setDueDate('');
+    setNotes('');
+    setProductSearch('');
+    setNotice('');
     setShowForm(true);
     void loadFormData();
   }
@@ -101,7 +102,19 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
     () => products.filter((product) => (quantities[product.id] || 0) > 0),
     [products, quantities],
   );
-  const selectedCustomer = customers.find((customer) => customer.id === selectedCustomerId);
+  const visibleProducts = useMemo(() => {
+    const query = productSearch.trim().toLocaleLowerCase();
+    return products.filter((product) => !query || product.name.toLocaleLowerCase().includes(query)
+      || (product.sku || '').toLocaleLowerCase().includes(query));
+  }, [productSearch, products]);
+  const invoiceTotal = selectedProducts.reduce(
+    (total, product) => {
+      const subtotal = BigInt(product.unit_price_cents) * BigInt(quantities[product.id]);
+      const tax = (subtotal * BigInt(product.tax_rate_bp) + 5_000n) / 10_000n;
+      return total + Number(subtotal + tax);
+    },
+    0,
+  );
   const canCreate = Boolean(selectedCustomerId)
     && selectedProducts.length > 0
     && selectedProducts.every((product) => quantities[product.id] <= 1_000_000)
@@ -120,7 +133,6 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
         body: {
           doc_type: 'invoice',
           customer_id: selectedCustomerId,
-          issue_date: issueDate || null,
           due_date: dueDate || null,
           valid_until: null,
           notes: notes.trim() || null,
@@ -141,9 +153,20 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
       setQuantities({});
       setDueDate('');
       setNotes('');
-      setNotice(`Rascunho de fatura criado para ${selectedCustomer?.name || 'o cliente'}. Reveja e emita na lista.`);
+      setProductSearch('');
+      let issueError = '';
+      try {
+        const issued = await request<SalesDocument>(`/sales/documents/${draft.id}/issue`, {
+          method: 'POST',
+          companyId,
+        });
+        setSheetDocumentId(issued.id);
+        setNotice(`Fatura ${issued.document_number || ''} emitida com sucesso.`);
+      } catch (reason) {
+        issueError = `O rascunho foi guardado, mas não foi possível emitir a fatura: ${getErrorMessage(reason, 'verifique o stock e tente novamente na lista.')}`;
+      }
       await loadDocuments();
-      setDocuments((current) => current.some((item) => item.id === draft.id) ? current : [draft, ...current]);
+      if (issueError) setError(issueError);
     } catch (reason) {
       setError(getErrorMessage(reason, 'Não foi possível criar o rascunho da fatura.'));
     } finally {
@@ -161,7 +184,8 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
     setNotice('');
     try {
       await request<SalesDocument>(`/sales/documents/${document.id}/issue`, { method: 'POST', companyId });
-      setNotice('Fatura emitida com sucesso. Já pode descarregar o PDF.');
+      setNotice('Fatura emitida com sucesso. Reveja o documento e imprima.');
+      setSheetDocumentId(document.id);
       await loadDocuments();
     } catch (reason) {
       setError(getErrorMessage(reason, 'Não foi possível emitir a fatura.'));
@@ -195,7 +219,7 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
   return (
     <div className="ops-page">
       <div className="ops-page-heading">
-        <div><span className="eyebrow">DOCUMENTOS COMERCIAIS</span><h1>Faturas</h1><p>Prepare rascunhos, emita documentos e descarregue os respetivos PDFs.</p></div>
+        <div><span className="eyebrow">DOCUMENTOS COMERCIAIS</span><h1>Faturas</h1><p>Emita faturas e descarregue os respetivos documentos.</p></div>
         <button className="button button--primary" type="button" onClick={openForm} disabled={formDataLoading}>
           {formDataLoading ? 'A preparar…' : <><span>＋</span> Nova fatura</>}
         </button>
@@ -206,7 +230,7 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
       {showForm && (
         <section className="ops-card ops-form-card">
           <div className="ops-card-heading">
-            <div><h2>Preparar fatura</h2><p>O cliente é necessário; o NIF é opcional. Se informado, deve corresponder ao tipo de cliente.</p></div>
+            <div><h2>Nova fatura</h2><p>Escolha o cliente e os artigos. O stock é atualizado ao emitir.</p></div>
             <button type="button" className="ops-close" aria-label="Fechar" onClick={() => setShowForm(false)}>×</button>
           </div>
           {formDataLoading ? <div className="ops-loading"><span className="loading-dot" />A carregar clientes e produtos…</div> : (
@@ -218,51 +242,42 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
                 </select>
               </label>
               {!customers.length && <p className="ops-form-help ops-field--wide">Ainda não há clientes ativos. Registe um cliente para associar à fatura; o NIF é opcional.</p>}
-              <label className="ops-field"><span>Data da fatura</span><input type="date" required value={issueDate} onChange={(event) => setIssueDate(event.target.value)} /></label>
-              <label className="ops-field"><span>Data de vencimento</span><input type="date" min={issueDate} value={dueDate} onChange={(event) => setDueDate(event.target.value)} /></label>
+              <label className="ops-field"><span>Vencimento (opcional)</span><input type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} /></label>
               <div className="ops-field ops-field--wide">
-                <span>Produtos e quantidades</span>
+                <span>Artigos</span>
+                <input
+                  aria-label="Pesquisar artigos"
+                  placeholder="Pesquisar por nome ou código"
+                  value={productSearch}
+                  onChange={(event) => setProductSearch(event.target.value)}
+                />
                 <div className="document-product-list">
-                  {products.map((product) => {
+                  {visibleProducts.map((product) => {
                     const quantity = quantities[product.id] || 0;
                     const unavailable = product.track_stock && product.stock_quantity === 0;
                     return (
-                      <label className="document-product" key={product.id}>
-                        <input
-                          type="checkbox"
-                          checked={quantity > 0}
-                          disabled={unavailable}
-                          onChange={(event) => setQuantities((current) => ({
-                            ...current,
-                            [product.id]: event.target.checked ? 1 : 0,
-                          }))}
-                        />
-                        <span><strong>{product.name}</strong><small>{money(product.unit_price_cents)}{product.track_stock ? ` · ${product.stock_quantity} em stock` : ' · Serviço'}</small></span>
-                        {quantity > 0 && <input
-                          aria-label={`Quantidade de ${product.name}`}
-                          type="number"
-                          min={1}
-                          max={product.track_stock ? product.stock_quantity : 1000000}
-                          value={quantity}
-                          onChange={(event) => setQuantities((current) => ({
-                            ...current,
-                            [product.id]: Math.min(1_000_000, Math.max(1, Number(event.target.value) || 1)),
-                          }))}
-                          onClick={(event) => event.stopPropagation()}
-                        />}
-                      </label>
+                      <div className="document-product" key={product.id}>
+                        <span><strong>{product.name}</strong><small>{money(product.unit_price_cents)}{product.track_stock ? ` · ${product.stock_quantity} em stock` : product.product_type === 'service' ? ' · Serviço' : ' · Sem controlo de stock'}</small></span>
+                        <div className="document-product__stepper">
+                          <button aria-label={`Diminuir ${product.name}`} disabled={quantity < 1 || busy} onClick={() => setQuantities((current) => ({ ...current, [product.id]: quantity - 1 }))} type="button">−</button>
+                          <output aria-label={`Quantidade de ${product.name}`}>{quantity}</output>
+                          <button aria-label={`Aumentar ${product.name}`} disabled={unavailable || busy || (product.track_stock && quantity >= product.stock_quantity) || quantity >= 1_000_000} onClick={() => setQuantities((current) => ({ ...current, [product.id]: quantity + 1 }))} type="button">＋</button>
+                        </div>
+                      </div>
                     );
                   })}
-                  {!products.length && <p className="empty-note">Não existem produtos ativos no catálogo.</p>}
+                  {!visibleProducts.length && <p className="empty-note">{products.length ? 'Não foram encontrados artigos.' : 'Não existem artigos ativos no catálogo.'}</p>}
                 </div>
               </div>
               <label className="ops-field ops-field--wide"><span>Observações (opcional)</span><textarea rows={2} maxLength={2000} value={notes} onChange={(event) => setNotes(event.target.value)} /></label>
               {selectedProducts.some((product) => product.track_stock && quantities[product.id] > product.stock_quantity) && (
                 <p className="ops-form-help ops-field--wide">A quantidade indicada ultrapassa o stock disponível.</p>
               )}
+              <div className="document-invoice-total ops-field--wide"><span>Total com impostos</span><strong>{money(invoiceTotal)}</strong></div>
+              <p className="document-stock-note ops-field--wide">Ao emitir, a fatura recebe número fiscal e os artigos controlados são descontados do stock.</p>
               <div className="ops-form-actions">
                 <button type="button" className="button button--secondary" onClick={() => setShowForm(false)}>Cancelar</button>
-                <button type="submit" className="button button--primary" disabled={!canCreate || busy}>{busy ? 'A guardar…' : 'Guardar rascunho'}</button>
+                <button type="submit" className="button button--primary" disabled={!canCreate || busy}>{busy ? 'A emitir…' : 'Emitir fatura'}</button>
               </div>
             </form>
           )}
@@ -271,7 +286,7 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
 
       <section className="ops-card">
         <div className="ops-card-heading">
-          <div><h2>Documentos emitidos e rascunhos</h2><p>{documents.length} faturas na lista</p></div>
+        <div><h2>Faturas</h2><p>{documents.length} documentos na lista</p></div>
           <button type="button" className="ops-icon-button" aria-label="Atualizar faturas" onClick={() => void loadDocuments()}>↻</button>
         </div>
         {loading ? <div className="ops-loading"><span className="loading-dot" />A carregar faturas…</div> : (
@@ -288,16 +303,21 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
                     <td><strong>{money(document.total_cents)}</strong>{document.balance_cents > 0 && <small>Em falta {money(document.balance_cents)}</small>}</td>
                     <td><span className="document-row-actions">
                       {document.status === 'draft' && <button type="button" className="button button--primary document-action" disabled={busy} onClick={() => void issueInvoice(document)}>Emitir</button>}
+                      <button type="button" className="button button--secondary document-action" onClick={() => setSheetDocumentId(document.id)}>Ver</button>
                       <button type="button" className="button button--secondary document-action" disabled={busy} onClick={() => void downloadPdf(document)}>PDF</button>
                     </span></td>
                   </tr>
                 ))}
-                {!documents.length && <tr><td className="ops-table-empty" colSpan={6}>Ainda não existem faturas. Crie um rascunho para começar.</td></tr>}
+                {!documents.length && <tr><td className="ops-table-empty" colSpan={6}>Ainda não existem faturas. Emita a primeira para começar.</td></tr>}
               </tbody>
             </table>
           </div>
         )}
       </section>
+
+      {sheetDocumentId && (
+        <DocumentSheet companyId={companyId} documentId={sheetDocumentId} onClose={() => setSheetDocumentId(null)} />
+      )}
     </div>
   );
 }

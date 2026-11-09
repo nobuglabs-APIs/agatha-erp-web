@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { ApiError, mediaUrl, request, upload } from '../api/client';
+import { Icon } from './Icon';
 import { OperationalWorkspace } from './OperationalWorkspace';
 import { IndustrySettingsPage } from './operations/IndustryPage';
 import type {
@@ -139,15 +140,11 @@ export function CompanyWorkspace({
   selectedCompanyId,
   onCompanyChange,
   onLogout,
-  isPlatformAdmin,
-  onOpenPlatform,
 }: {
   profile: UserProfile;
   selectedCompanyId: string;
   onCompanyChange: (id: string) => void;
   onLogout: () => void;
-  isPlatformAdmin: boolean;
-  onOpenPlatform: () => void;
 }) {
   const [company, setCompany] = useState<Company | null>(null);
   const [documents, setDocuments] = useState<CompanyDocument[]>([]);
@@ -326,8 +323,6 @@ export function CompanyWorkspace({
         companyId={selectedCompanyId}
         companyName={company.trade_name || company.legal_name}
         onLogout={onLogout}
-        onOpenPlatform={onOpenPlatform}
-        isPlatformAdmin={isPlatformAdmin}
         memberships={profile.companies}
         onCompanyChange={onCompanyChange}
         defaultView={canManage && subscription?.status !== 'active' && subscription?.status !== 'trialing' ? 'billing' : 'overview'}
@@ -367,9 +362,9 @@ export function CompanyWorkspace({
           <h2>{company.status === 'approved' ? 'A sua empresa está aprovada.' : 'Vamos preparar a sua empresa.'}</h2>
           <p>{company.status === 'approved'
             ? 'A informação de onboarding e a subscrição ficam reunidas aqui. As operações do ERP serão disponibilizadas conforme os módulos ativos.'
-            : 'Complete os dados e envie os documentos necessários. A equipa Agatha valida o registo para ativar a operação.'}</p>
+            : 'Complete os dados e envie os documentos necessários. A equipa Ágata valida o registo para ativar a operação.'}</p>
         </div>
-        <div className="welcome-orbit" aria-hidden="true"><span>A</span><i /><b /></div>
+        <div className="welcome-orbit" aria-hidden="true"><img src="/brand/agata-mark.png" alt="" /><i /><b /></div>
       </section>
 
       <section className="summary-grid">
@@ -402,7 +397,7 @@ export function CompanyWorkspace({
 
       {businessType && (
         <section className="business-type-lock">
-          <span className="business-type-lock__icon" aria-hidden="true">◇</span>
+          <span className="business-type-lock__icon" aria-hidden="true"><Icon name="spark" size={18} /></span>
           <div><small>AMBIENTE DE NEGÓCIO</small><strong>{businessType.name}</strong><span>Este tipo de negócio fica fixo para esta empresa.</span></div>
           <span className="business-type-lock__badge">CONFIGURAÇÃO FIXA</span>
         </section>
@@ -479,8 +474,8 @@ export function CompanyWorkspace({
 
       {company.status === 'under_review' && (
         <section className="panel-card review-wait">
-          <span className="review-wait__icon">◷</span>
-          <div><h2>Registo em análise</h2><p>A equipa Agatha está a validar os dados e documentos. Receberá uma notificação quando houver uma atualização.</p></div>
+          <span className="review-wait__icon"><Icon name="clock" size={22} /></span>
+          <div><h2>Registo em análise</h2><p>A equipa Ágata está a validar os dados e documentos. Receberá uma notificação quando houver uma atualização.</p></div>
           <button className="button button--secondary" type="button" onClick={() => void loadCompany()}>Atualizar estado</button>
         </section>
       )}
@@ -488,7 +483,7 @@ export function CompanyWorkspace({
       {company.status === 'approved' && (
         <section className="panel-card plan-section">
           <div className="panel-heading">
-            <div><span className="step-number">✳</span><div><h2>Plano e subscrição</h2><p>Os módulos ficam disponíveis quando a subscrição estiver ativa.</p></div></div>
+            <div><span className="step-number"><Icon name="spark" size={15} /></span><div><h2>Plano e subscrição</h2><p>Os módulos ficam disponíveis quando a subscrição estiver ativa.</p></div></div>
           </div>
           {subscription && (
             <div className="subscription-banner">
@@ -501,7 +496,7 @@ export function CompanyWorkspace({
               {plans.map((plan) => (
                 <article className={`plan-card${plan.code === 'pro' ? ' plan-card--featured' : ''}`} key={plan.code}>
                   {plan.code === 'pro' && <span className="plan-card__tag">MAIS COMPLETO</span>}
-                  <span className="eyebrow">AGATHA ERP</span>
+                  <span className="eyebrow">ÁGATA ERP</span>
                   <h3>{plan.name}</h3>
                   <p>{plan.code === 'starter' ? 'As ferramentas essenciais para começar a gerir a empresa.' : plan.code === 'pro' ? 'Mais recursos para acompanhar todas as áreas do negócio.' : 'Monte um conjunto de módulos ajustado à sua operação.'}</p>
                   {plan.code === 'custom' ? (
@@ -542,7 +537,7 @@ export function CompanyWorkspace({
 
       {company.status === 'approved' && subscription?.status === 'active' && (
         <section className="panel-card active-modules">
-          <div className="panel-heading"><div><span className="step-number">✓</span><div><h2>Módulos disponíveis</h2><p>Funcionalidades incluídas na sua subscrição.</p></div></div></div>
+          <div className="panel-heading"><div><span className="step-number"><Icon name="check" size={15} /></span><div><h2>Módulos disponíveis</h2><p>Funcionalidades incluídas na sua subscrição.</p></div></div></div>
           <div className="module-chips">{subscription.modules.map((module) => <span className="module-chip" key={module}>{module.replaceAll('_', ' ')}</span>)}</div>
           <p className="feature-note">As áreas operacionais serão ativadas nesta interface nas próximas etapas de desenvolvimento.</p>
         </section>
@@ -550,7 +545,7 @@ export function CompanyWorkspace({
 
       {documents.length > 0 && company.status === 'approved' && (
         <section className="panel-card">
-          <div className="panel-heading"><div><span className="step-number">✓</span><div><h2>Documentos validados</h2><p>Ficheiros associados ao processo da empresa.</p></div></div></div>
+          <div className="panel-heading"><div><span className="step-number"><Icon name="check" size={15} /></span><div><h2>Documentos validados</h2><p>Ficheiros associados ao processo da empresa.</p></div></div></div>
           <div className="document-list">
             {documents.map((doc) => (
               <div className="document-row" key={doc.id}>

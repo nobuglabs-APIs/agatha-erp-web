@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { request, requestBlob } from '../../api/client';
+import { request } from '../../api/client';
 import type { Customer, Product, Sale } from './shared';
 import { dateTime, getErrorMessage, listPage, money, parseAmountCents } from './shared';
+import { DocumentSheet } from './DocumentSheet';
 
 const paymentMethods = [
   { value: 'cash', label: 'Dinheiro' },
@@ -27,7 +28,7 @@ export function SalesPage({ companyId }: { companyId: string }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
-  const [lastSale, setLastSale] = useState<Sale | null>(null);
+  const [sheetDocumentId, setSheetDocumentId] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -111,7 +112,6 @@ export function SalesPage({ companyId }: { companyId: string }) {
           payments: paidCents ? [{ method: paymentMethod, amount_cents: paidCents }] : [],
         },
       });
-      setLastSale(sale);
       const documentLabel = sale.invoice_document_type === 'invoice_receipt' ? 'fatura-recibo' : 'fatura';
       setNotice(sale.invoice_document_number
         ? `Venda #${sale.number} registada e ${documentLabel} ${sale.invoice_document_number} emitida.`
@@ -120,29 +120,12 @@ export function SalesPage({ companyId }: { companyId: string }) {
       setSelectedCustomerId('');
       setPaymentMode('full');
       setPartialAmountInput('');
+      if (sale.invoice_document_id) setSheetDocumentId(sale.invoice_document_id);
       await loadData();
     } catch (reason) {
       setError(getErrorMessage(reason, 'Não foi possível concluir a venda.'));
     } finally {
       setBusy(false);
-    }
-  }
-
-  async function downloadInvoice(sale: Sale) {
-    if (!sale.invoice_document_id) return;
-    setError('');
-    try {
-      const pdf = await requestBlob(`/sales/documents/${sale.invoice_document_id}/pdf`, companyId);
-      const url = URL.createObjectURL(pdf);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `${(sale.invoice_document_number || `venda-${sale.number}`).replace(/[^\w.-]+/g, '_')}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-    } catch (reason) {
-      setError(getErrorMessage(reason, 'Não foi possível descarregar a fatura.'));
     }
   }
 
@@ -154,13 +137,6 @@ export function SalesPage({ companyId }: { companyId: string }) {
       </div>
       {error && <div className="ops-alert ops-alert--error" role="alert">{error}</div>}
       {notice && <div className="ops-alert ops-alert--success" role="status">{notice}</div>}
-      {lastSale && (
-        <section className="ops-sale-success">
-          <span>✓</span><div><strong>Venda #{lastSale.number} concluída</strong><small>{money(lastSale.total_cents)} · {lastSale.status === 'paid' ? 'Pagamento registado' : 'Pagamento em aberto'} · {lastSale.invoice_document_type === 'invoice_receipt' ? 'Fatura-recibo' : 'Fatura'} {lastSale.invoice_document_number || 'emitida'}</small></div>
-          {lastSale.invoice_document_id && <button type="button" className="ops-text-button" onClick={() => void downloadInvoice(lastSale)}>Descarregar fatura</button>}
-          <button type="button" onClick={() => setLastSale(null)} aria-label="Fechar">×</button>
-        </section>
-      )}
       <section className="ops-pos-layout">
         <div className="ops-card ops-pos-catalog">
           <div className="ops-table-toolbar">
@@ -217,10 +193,14 @@ export function SalesPage({ companyId }: { companyId: string }) {
       <section className="ops-card">
         <div className="ops-card-heading"><div><h2>Vendas recentes</h2><p>Últimos registos da empresa</p></div><button type="button" className="ops-icon-button" aria-label="Atualizar vendas" onClick={() => void loadData()}>↻</button></div>
         <div className="ops-table-wrap"><table className="ops-table"><thead><tr><th>Número</th><th>Data</th><th>Estado</th><th>Total</th><th>Recebido</th><th>Documento fiscal</th></tr></thead><tbody>
-          {sales.map((sale) => <tr key={sale.id}><td><strong>#{sale.number}</strong></td><td>{dateTime(sale.created_at)}</td><td><span className={`ops-sale-status ops-sale-status--${sale.status}`}>{sale.status === 'paid' ? 'Pago' : sale.status === 'cancelled' ? 'Anulado' : sale.status === 'partially_paid' ? 'Parcial' : 'Em aberto'}</span></td><td><strong>{money(sale.total_cents)}</strong></td><td>{money(sale.paid_cents)}</td><td>{sale.invoice_document_id ? <button type="button" className="ops-text-button" onClick={() => void downloadInvoice(sale)}>{sale.invoice_document_number} · PDF</button> : '—'}</td></tr>)}
+          {sales.map((sale) => <tr key={sale.id}><td><strong>#{sale.number}</strong></td><td>{dateTime(sale.created_at)}</td><td><span className={`ops-sale-status ops-sale-status--${sale.status}`}>{sale.status === 'paid' ? 'Pago' : sale.status === 'cancelled' ? 'Anulado' : sale.status === 'partially_paid' ? 'Parcial' : 'Em aberto'}</span></td><td><strong>{money(sale.total_cents)}</strong></td><td>{money(sale.paid_cents)}</td><td>{sale.invoice_document_id ? <button type="button" className="ops-text-button" onClick={() => setSheetDocumentId(sale.invoice_document_id)}>{sale.invoice_document_number} · Ver fatura</button> : '—'}</td></tr>)}
           {!sales.length && <tr><td className="ops-table-empty" colSpan={6}>As vendas concluídas aparecerão aqui.</td></tr>}
         </tbody></table></div>
       </section>
+
+      {sheetDocumentId && (
+        <DocumentSheet companyId={companyId} documentId={sheetDocumentId} onClose={() => setSheetDocumentId(null)} />
+      )}
     </div>
   );
 }

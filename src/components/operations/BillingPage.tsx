@@ -163,7 +163,7 @@ export function BillingPage({
           {subscription?.status === 'pending_payment' && (
             <section className="trial-banner">
               <span className="trial-banner__mark">◷</span>
-              <div><strong>Plano à espera de ativação</strong><p>A equipa Agatha confirmará a subscrição. Até lá, as operações ficam suspensas.</p></div>
+              <div><strong>Plano à espera de ativação</strong><p>A equipa Ágata confirmará a subscrição. Até lá, as operações ficam suspensas.</p></div>
             </section>
           )}
           {subscription?.status === 'active' && (
@@ -176,7 +176,7 @@ export function BillingPage({
             {plans.map((plan) => (
               <article className={`plan-card${plan.code === 'pro' ? ' plan-card--featured' : ''}`} key={plan.code}>
                 {plan.code === 'pro' && <span className="plan-card__tag">MAIS COMPLETO</span>}
-                <span className="eyebrow">AGATHA ERP</span>
+                <span className="eyebrow">ÁGATA ERP</span>
                 <h3>{plan.name}</h3>
                 <p>{planDescriptions[plan.code] || plan.description}</p>
                 <p className="plan-card__price">
