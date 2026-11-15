@@ -52,7 +52,9 @@ export async function logoutSession(): Promise<void> {
   }
 }
 
-async function renewSession(): Promise<boolean> {
+let activeRenewal: Promise<boolean> | null = null;
+
+async function performRenewal(): Promise<boolean> {
   const refreshToken = sessionStorage.getItem(REFRESH_TOKEN_KEY);
   if (!refreshToken) return false;
 
@@ -67,6 +69,22 @@ async function renewSession(): Promise<boolean> {
   }
   saveTokens(await response.json() as TokenResponse);
   return true;
+}
+
+// O refresh token é de uso único. Várias chamadas podem falhar com 401 ao mesmo
+// tempo; partilham a mesma renovação para não apresentar o token duas vezes
+// (o servidor revoga a sessão ao detetar reutilização).
+function renewSession(): Promise<boolean> {
+  if (!activeRenewal) {
+    activeRenewal = performRenewal().finally(() => {
+      activeRenewal = null;
+    });
+  }
+  return activeRenewal;
+}
+
+function notifySessionExpired(): void {
+  window.dispatchEvent(new Event('agatha:session-expired'));
 }
 
 async function requestResponse(
@@ -91,8 +109,11 @@ async function requestResponse(
     headers,
     body: body === undefined ? undefined : body instanceof FormData ? body : JSON.stringify(body),
   });
-  if (response.status === 401 && retry && token && await renewSession()) {
-    return requestResponse(path, method, body, companyId, false, extraHeaders);
+  if (response.status === 401) {
+    if (retry && token && await renewSession()) {
+      return requestResponse(path, method, body, companyId, false, extraHeaders);
+    }
+    if (token) notifySessionExpired();
   }
   return response;
 }

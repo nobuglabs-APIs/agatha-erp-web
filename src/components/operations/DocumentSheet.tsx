@@ -4,6 +4,7 @@ import { request, requestBlob } from '../../api/client';
 import { Icon } from '../Icon';
 import type { Company } from '../../api/types';
 import { getErrorMessage, money } from './shared';
+import { documentTypeLabel } from './documentTypes';
 
 export interface SalesDocumentLine {
   id: string;
@@ -49,20 +50,13 @@ export interface SalesDocumentDetail {
   payments: SalesDocumentPayment[];
 }
 
-const typeLabels: Record<string, string> = {
-  invoice: 'Fatura',
-  invoice_receipt: 'Fatura-recibo',
-  receipt: 'Recibo',
-  credit_note: 'Nota de crédito',
-  debit_note: 'Nota de débito',
-  quote: 'Orçamento',
-  order: 'Encomenda',
-  delivery_note: 'Guia de remessa',
-};
-
 const statusLabels: Record<string, string> = {
   draft: 'Rascunho',
+  sent: 'Enviada',
+  confirmed: 'Confirmada',
   issued: 'Emitida',
+  partially_fulfilled: 'Parcialmente satisfeita',
+  fulfilled: 'Satisfeita',
   partially_paid: 'Parcialmente paga',
   paid: 'Paga',
   cancelled: 'Anulada',
@@ -175,7 +169,7 @@ export function DocumentSheet({
     ? [company.address, company.city, company.province, company.country].filter(Boolean).join(', ')
     : '';
   const cancelled = document?.status === 'cancelled';
-  const title = document ? `${typeLabels[document.doc_type] || document.doc_type} ${document.document_number || '(rascunho)'}` : 'Documento';
+  const title = document ? `${documentTypeLabel(document.doc_type)} ${document.document_number || '(rascunho)'}` : 'Documento';
 
   return createPortal(
     <div className="invoice-overlay" role="dialog" aria-label={title} aria-modal="true">
@@ -219,7 +213,7 @@ export function DocumentSheet({
                 {company?.email && <span>{company.email}</span>}
               </div>
               <div className="inv-title">
-                <span className="inv-title__kind">{typeLabels[document.doc_type] || document.doc_type}</span>
+                <span className="inv-title__kind">{documentTypeLabel(document.doc_type)}</span>
                 <strong>{document.document_number || 'Rascunho'}</strong>
                 <span className={`inv-badge inv-badge--${cancelled ? 'cancelled' : 'issued'}`}>
                   {statusLabels[document.status] || document.status}

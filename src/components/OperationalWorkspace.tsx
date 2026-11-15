@@ -10,6 +10,7 @@ import { DocumentsPage } from './operations/DocumentsPage';
 import { BarbershopPage } from './operations/BarbershopPage';
 import { BillingPage } from './operations/BillingPage';
 import { CommercePage } from './operations/CommercePage';
+import { CreditNotesPage } from './operations/CreditNotesPage';
 import { HospitalityPage } from './operations/HospitalityPage';
 import { PharmacyPage } from './operations/PharmacyPage';
 import { PurchasesPage } from './operations/PurchasesPage';
@@ -25,6 +26,7 @@ const coreNavigation: Array<{ id: View; label: string; icon: IconName; module: s
   { id: 'overview', label: 'Visão geral', icon: 'home', module: 'reports' },
   { id: 'sales', label: 'Vendas', icon: 'trend', module: 'sales' },
   { id: 'documents', label: 'Faturas', icon: 'invoice', module: 'sales' },
+  { id: 'credit-notes', label: 'Notas de crédito', icon: 'note', module: 'sales' },
   { id: 'receivables', label: 'A receber', icon: 'wallet', module: 'sales' },
   { id: 'purchases', label: 'Compras', icon: 'bag', module: 'purchases' },
   { id: 'cash', label: 'Caixa', icon: 'banknote', module: 'sales' },
@@ -192,14 +194,15 @@ export function OperationalWorkspace({
           {view === 'overview' && <DashboardPage key={`dashboard-${refreshKey}`} companyId={companyId} onNavigate={navigate} />}
           {view === 'products' && <ProductsPage key={`products-${refreshKey}`} companyId={companyId} />}
           {view === 'documents' && <DocumentsPage key={`documents-${refreshKey}`} companyId={companyId} />}
+          {view === 'credit-notes' && <CreditNotesPage key={`credit-notes-${refreshKey}`} companyId={companyId} />}
           {view === 'receivables' && <ReceivablesPage key={`receivables-${refreshKey}`} companyId={companyId} />}
           {view === 'purchases' && <PurchasesPage key={`purchases-${refreshKey}`} companyId={companyId} />}
           {view === 'cash' && <CashRegisterPage key={`cash-${refreshKey}`} companyId={companyId} />}
           {view === 'customers' && <CustomersPage key={`customers-${refreshKey}`} companyId={companyId} />}
           {view === 'stock' && <StockPage key={`stock-${refreshKey}`} companyId={companyId} />}
-          {view === 'sales' && <SalesPage key={`sales-${refreshKey}`} companyId={companyId} />}
+          {view === 'sales' && <SalesPage key={`sales-${refreshKey}`} companyId={companyId} onNavigate={navigate} />}
           {view === 'billing' && <BillingPage key={`billing-${companyId}`} companyId={companyId} canManage={canManageBilling} onSubscriptionChange={onSubscriptionChange} />}
-          {view === 'industry:commerce' && <CommercePage key={`commerce-${refreshKey}`} companyId={companyId} />}
+          {view === 'industry:commerce' && <CommercePage key={`commerce-${refreshKey}`} companyId={companyId} onNavigate={navigate} />}
           {view === 'industry:restaurant' && <RestaurantPage key={`restaurant-${refreshKey}`} companyId={companyId} />}
           {view === 'industry:barbershop' && <BarbershopPage key={`barbershop-${refreshKey}`} companyId={companyId} />}
           {view === 'industry:pharmacy' && <PharmacyPage key={`pharmacy-${refreshKey}`} companyId={companyId} />}
