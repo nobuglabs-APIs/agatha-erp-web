@@ -16,6 +16,8 @@ export interface Product {
   min_stock: number;
   is_active: boolean;
   image_url: string | null;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface Customer {
@@ -72,6 +74,18 @@ export interface SalesSummary {
   paid_cents: number;
   outstanding_cents: number;
   by_payment_method: Array<{ method: string; amount_cents: number }>;
+}
+
+export const PAYMENT_METHODS = [
+  { value: 'cash', label: 'Dinheiro' },
+  { value: 'multicaixa_express', label: 'Multicaixa Express' },
+  { value: 'card', label: 'Cartão' },
+  { value: 'bank_transfer', label: 'Transferência' },
+  { value: 'other', label: 'Outro' },
+];
+
+export function paymentMethodLabel(value: string): string {
+  return PAYMENT_METHODS.find((method) => method.value === value)?.label || value;
 }
 
 export function money(cents: number): string {

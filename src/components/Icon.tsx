@@ -4,6 +4,7 @@ export type IconName =
   | 'home'
   | 'trend'
   | 'invoice'
+  | 'note'
   | 'wallet'
   | 'bag'
   | 'banknote'
@@ -28,7 +29,10 @@ export type IconName =
   | 'spark'
   | 'alert'
   | 'printer'
-  | 'download';
+  | 'download'
+  | 'eye'
+  | 'edit'
+  | 'trash';
 
 const icons: Record<IconName, ReactNode> = {
   home: (
@@ -49,6 +53,13 @@ const icons: Record<IconName, ReactNode> = {
       <path d="M6 3.5h8l4 4v13H6z" />
       <path d="M14 3.5v4h4" />
       <path d="M9 11h6M9 14.5h6M9 18h4" />
+    </>
+  ),
+  note: (
+    <>
+      <path d="M6 3.5h8l4 4v13H6z" />
+      <path d="M14 3.5v4h4" />
+      <path d="M9.5 13.5h5" />
     </>
   ),
   wallet: (
@@ -212,6 +223,26 @@ const icons: Record<IconName, ReactNode> = {
       <path d="M12 3.5v11" />
       <path d="m8 11 4 3.5 4-3.5" />
       <path d="M4.5 16.5v2A1.5 1.5 0 0 0 6 20h12a1.5 1.5 0 0 0 1.5-1.5v-2" />
+    </>
+  ),
+  eye: (
+    <>
+      <path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z" />
+      <circle cx="12" cy="12" r="2.8" />
+    </>
+  ),
+  edit: (
+    <>
+      <path d="M4 20h4l10-10a2.1 2.1 0 0 0-3-3L5 17Z" />
+      <path d="M13.5 6.5 17.5 10.5" />
+    </>
+  ),
+  trash: (
+    <>
+      <path d="M4.5 6.5h15" />
+      <path d="M9.5 6.5V4.5h5v2" />
+      <path d="M6.5 6.5 7.5 20h9l1-13.5" />
+      <path d="M10 10.5v6M14 10.5v6" />
     </>
   ),
 };

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
-import { request } from '../../api/client';
+import { mediaUrl, request } from '../../api/client';
 import type { Page } from '../../api/types';
 import type { Sale } from './shared';
 import { dateTime, getErrorMessage, listPage, money } from './shared';
@@ -13,6 +13,7 @@ interface PosProduct {
   tax_rate_bp: number;
   track_stock: boolean;
   stock_quantity: number;
+  image_url: string | null;
 }
 
 interface Promotion {
@@ -51,6 +52,11 @@ interface ReturnDetail extends ReturnRow {
   items: Array<{ sale_item_id: string; quantity: number }>;
 }
 
+interface CashSession {
+  id: string;
+  status: 'open' | 'closed';
+}
+
 const paymentMethods = [
   ['cash', 'Dinheiro'],
   ['multicaixa_express', 'Multicaixa Express'],
@@ -59,7 +65,8 @@ const paymentMethods = [
   ['other', 'Outro'],
 ];
 
-export function CommercePage({ companyId }: { companyId: string }) {
+export function CommercePage({ companyId, onNavigate }: { companyId: string; onNavigate?: (view: string) => void }) {
+  const [cashOpen, setCashOpen] = useState(false);
   const [products, setProducts] = useState<PosProduct[]>([]);
   const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
@@ -81,16 +88,18 @@ export function CommercePage({ companyId }: { companyId: string }) {
     setLoading(true);
     setError('');
     try {
-      const [productRows, promotionPage, salePage, returnPage] = await Promise.all([
+      const [productRows, promotionPage, salePage, returnPage, cashSession] = await Promise.all([
         request<PosProduct[]>('/commerce/pos/products?limit=100', { companyId }),
         request<Page<Promotion>>('/commerce/promotions?page=1&per_page=100', { companyId }),
         listPage<Sale>('/sales', companyId, 20),
         request<Page<ReturnRow>>('/commerce/returns?page=1&per_page=100', { companyId }),
+        request<CashSession | null>('/cash-register/active', { companyId }),
       ]);
       setProducts(productRows);
       setPromotions(promotionPage.items);
       setSales(salePage.items);
       setReturns(returnPage.items);
+      setCashOpen(cashSession?.status === 'open');
     } catch (reason) {
       setError(getErrorMessage(reason, 'Não foi possível carregar o módulo de comércio.'));
     } finally {
@@ -146,7 +155,7 @@ export function CommercePage({ companyId }: { companyId: string }) {
 
   async function checkout() {
     const items = products.filter((product) => (cart[product.id] || 0) > 0);
-    if (!items.length || totalCents <= 0 || insufficientStock || invalidPromotion) return;
+    if (!cashOpen || !items.length || totalCents <= 0 || insufficientStock || invalidPromotion) return;
     setBusy(true);
     setError('');
     setNotice('');
@@ -275,6 +284,12 @@ export function CommercePage({ companyId }: { companyId: string }) {
       </div>
       {error && <div className="ops-alert ops-alert--error" role="alert">{error}</div>}
       {notice && <div className="ops-alert ops-alert--success" role="status">{notice}</div>}
+      {!cashOpen && !loading && (
+        <div className="ops-alert ops-alert--error" role="alert">
+          Abra o caixa antes de iniciar uma venda.
+          {onNavigate && <button type="button" className="ops-text-button" onClick={() => onNavigate('cash')}>Abrir caixa</button>}
+        </div>
+      )}
       {loading ? <div className="ops-loading"><span className="loading-dot" />A carregar comércio…</div> : (
         <>
           <section className="ops-pos-layout">
@@ -282,6 +297,9 @@ export function CommercePage({ companyId }: { companyId: string }) {
               <div className="ops-table-toolbar"><div><h2>Produtos do POS</h2><p>{products.length} artigos encontrados</p></div><label className="ops-search ops-search--inline"><span>⌕</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Nome, SKU ou código" /></label></div>
               <form className="ops-industry-inline-form" onSubmit={(event) => void addBarcode(event)}><input aria-label="Ler código de barras" value={barcode} onChange={(event) => setBarcode(event.target.value)} placeholder="Ler ou inserir código de barras" /><button className="button button--secondary" type="submit">Adicionar</button></form>
               <div className="ops-pos-product-grid">{filteredProducts.map((product) => <button type="button" className="ops-pos-product" key={product.id} disabled={product.track_stock && product.stock_quantity <= 0} onClick={() => addProduct(product)}>
+                <span className={product.image_url ? 'ops-pos-product__symbol ops-pos-product__symbol--media' : 'ops-pos-product__symbol'}>
+                  {product.image_url ? <img src={mediaUrl(product.image_url)} alt="" /> : product.name.slice(0, 1).toUpperCase()}
+                </span>
                 <strong>{product.name}</strong><small>{product.sku}{product.barcode ? ` · ${product.barcode}` : ''}</small><b>{money(product.unit_price_cents)}</b><small>{product.track_stock ? `Stock: ${product.stock_quantity}` : 'Serviço'}</small>
               </button>)}</div>
             </section>
@@ -295,7 +313,8 @@ export function CommercePage({ companyId }: { companyId: string }) {
               {insufficientStock && <small className="ops-form-help">A quantidade no carrinho excede o stock disponível de um ou mais artigos.</small>}
               <label className="ops-field"><span>Pagamento</span><select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value)}>{paymentMethods.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
               <div className="ops-industry-totals"><span>Subtotal com imposto</span><strong>{money(grossCents)}</strong><span>Desconto</span><strong>− {money(discountCents)}</strong><span>Total</span><strong>{money(totalCents)}</strong></div>
-              <button type="button" className="button button--primary" disabled={busy || totalCents <= 0 || insufficientStock || invalidPromotion || !Object.keys(cart).some((id) => cart[id] > 0)} onClick={() => void checkout()}>Concluir venda</button>
+              <button type="button" className="button button--primary" disabled={busy || !cashOpen || totalCents <= 0 || insufficientStock || invalidPromotion || !Object.keys(cart).some((id) => cart[id] > 0)} onClick={() => void checkout()}>Concluir venda</button>
+              {!cashOpen && <small className="ops-form-help">Abra o caixa para concluir vendas.</small>}
             </section>
           </section>
 

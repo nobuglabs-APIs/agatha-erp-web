@@ -41,6 +41,18 @@ export default function App() {
     if (authenticated) void loadSession();
   }, [authenticated, loadSession]);
 
+  useEffect(() => {
+    function onSessionExpired() {
+      clearTokens();
+      setProfile(null);
+      setSelectedCompanyId('');
+      setAuthenticated(false);
+      setError('A sua sessão expirou. Inicie sessão novamente.');
+    }
+    window.addEventListener('agatha:session-expired', onSessionExpired);
+    return () => window.removeEventListener('agatha:session-expired', onSessionExpired);
+  }, []);
+
   function chooseCompany(companyId: string) {
     setSelectedCompanyId(companyId);
     sessionStorage.setItem('agatha_company_id', companyId);

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { request } from '../../api/client';
+import { mediaUrl, request } from '../../api/client';
 import type { Customer, Product, Sale } from './shared';
 import { dateTime, getErrorMessage, listPage, money, parseAmountCents } from './shared';
 import { DocumentSheet } from './DocumentSheet';
@@ -14,10 +14,18 @@ const paymentMethods = [
 
 type PaymentMode = 'full' | 'partial' | 'credit';
 
-export function SalesPage({ companyId }: { companyId: string }) {
+interface CashSession {
+  id: string;
+  status: 'open' | 'closed';
+  expected_cash_cents: number | null;
+  difference_cents: number | null;
+}
+
+export function SalesPage({ companyId, onNavigate }: { companyId: string; onNavigate?: (view: string) => void }) {
   const [products, setProducts] = useState<Product[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
+  const [cashSession, setCashSession] = useState<CashSession | null>(null);
   const [cart, setCart] = useState<Record<string, number>>({});
   const [selectedCustomerId, setSelectedCustomerId] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('cash');
@@ -34,14 +42,16 @@ export function SalesPage({ companyId }: { companyId: string }) {
     setLoading(true);
     setError('');
     try {
-      const [productResult, customerResult, salesResult] = await Promise.all([
+      const [productResult, customerResult, salesResult, cashSession] = await Promise.all([
         listPage<Product>('/products', companyId, 100),
         listPage<Customer>('/customers', companyId, 100),
         listPage<Sale>('/sales', companyId, 10),
+        request<CashSession | null>('/cash-register/active', { companyId }),
       ]);
       setProducts(productResult.items);
       setCustomers(customerResult.items);
       setSales(salesResult.items);
+      setCashSession(cashSession);
     } catch (reason) {
       setError(getErrorMessage(reason, 'Não foi possível carregar o ponto de venda.'));
     } finally {
@@ -50,6 +60,8 @@ export function SalesPage({ companyId }: { companyId: string }) {
   }, [companyId]);
 
   useEffect(() => { void loadData(); }, [loadData]);
+
+  const cashOpen = cashSession?.status === 'open';
 
   const filteredProducts = useMemo(() => {
     const query = productQuery.trim().toLocaleLowerCase();
@@ -72,7 +84,8 @@ export function SalesPage({ companyId }: { companyId: string }) {
       ? parseAmountCents(partialAmountInput)
       : 0;
   const selectedCustomer = customers.find((customer) => customer.id === selectedCustomerId);
-  const canCheckout = cartEntries.length > 0
+  const canCheckout = cashOpen
+    && cartEntries.length > 0
     && totalCents > 0
     && paidCents !== null
     && paidCents >= 0
@@ -94,6 +107,80 @@ export function SalesPage({ companyId }: { companyId: string }) {
       }
       return { ...current, [productId]: quantity };
     });
+  }
+
+  async function cancelSale(sale: Sale) {
+    const confirmed = window.confirm(
+      `Anular a venda #${sale.number}? O stock dos artigos é reposto e o documento fiscal associado é anulado. Esta ação não pode ser revertida.`,
+    );
+    if (!confirmed) return;
+    setBusy(true);
+    setError('');
+    setNotice('');
+    try {
+      await request(`/sales/${sale.id}/cancel`, { method: 'POST', companyId });
+      setNotice(`Venda #${sale.number} anulada.`);
+      await loadData();
+    } catch (reason) {
+      setError(getErrorMessage(reason, `Não foi possível anular a venda #${sale.number}.`));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function openCashRegister() {
+    const input = window.prompt('Fundo inicial para abrir o caixa (Kz):', '0.00');
+    if (input === null) return;
+    const openingCash = parseAmountCents(input.replace(',', '.'));
+    if (openingCash === null || openingCash < 0) {
+      setError('Indique um fundo inicial válido.');
+      return;
+    }
+    setBusy(true);
+    setError('');
+    setNotice('');
+    try {
+      await request<CashSession>('/cash-register/sessions', {
+        method: 'POST',
+        companyId,
+        body: { opening_cash_cents: openingCash },
+      });
+      setNotice('Caixa aberto. Já pode concluir vendas.');
+      await loadData();
+    } catch (reason) {
+      setError(getErrorMessage(reason, 'Não foi possível abrir o caixa.'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function closeCashRegister() {
+    if (!cashSession) return;
+    const expected = cashSession.expected_cash_cents || 0;
+    const input = window.prompt('Dinheiro contado no caixa (Kz):', (expected / 100).toFixed(2));
+    if (input === null) return;
+    const counted = parseAmountCents(input.replace(',', '.'));
+    if (counted === null || counted < 0) {
+      setError('Indique um valor contado válido.');
+      return;
+    }
+    setBusy(true);
+    setError('');
+    setNotice('');
+    try {
+      const closed = await request<CashSession>(`/cash-register/sessions/${cashSession.id}/close`, {
+        method: 'POST',
+        companyId,
+        body: { counted_cash_cents: counted },
+      });
+      const difference = closed.difference_cents || 0;
+      setNotice(`Caixa fechado. Diferença ${difference >= 0 ? '+' : '−'}${money(Math.abs(difference))}.`);
+      await loadData();
+    } catch (reason) {
+      setError(getErrorMessage(reason, 'Não foi possível fechar o caixa.'));
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function checkout() {
@@ -133,10 +220,27 @@ export function SalesPage({ companyId }: { companyId: string }) {
     <div className="ops-page">
       <div className="ops-page-heading">
         <div><span className="eyebrow">PONTO DE VENDA</span><h1>Vendas</h1><p>Registe vendas com preços do catálogo e atualização automática do stock.</p></div>
-        <span className="ops-pos-live"><i /> Caixa pronto</span>
+        <div className="ops-page-actions">
+          <span className="ops-pos-live"><i /> {cashOpen ? 'Caixa aberto' : 'Caixa fechado'}</span>
+          <button
+            type="button"
+            className={`button ${cashOpen ? 'button--secondary' : 'button--primary'}`}
+            disabled={busy || loading}
+            onClick={() => void (cashOpen ? closeCashRegister() : openCashRegister())}
+          >
+            {cashOpen ? 'Fechar caixa' : 'Abrir caixa'}
+          </button>
+        </div>
       </div>
       {error && <div className="ops-alert ops-alert--error" role="alert">{error}</div>}
       {notice && <div className="ops-alert ops-alert--success" role="status">{notice}</div>}
+      {!cashOpen && !loading && (
+        <div className="ops-alert ops-alert--error" role="alert">
+          Abra o caixa antes de iniciar uma venda.
+          <button type="button" className="ops-text-button" disabled={busy} onClick={() => void openCashRegister()}>Abrir caixa</button>
+          {onNavigate && <button type="button" className="ops-text-button" onClick={() => onNavigate('cash')}>Gerir caixa</button>}
+        </div>
+      )}
       <section className="ops-pos-layout">
         <div className="ops-card ops-pos-catalog">
           <div className="ops-table-toolbar">
@@ -148,7 +252,9 @@ export function SalesPage({ companyId }: { companyId: string }) {
               {filteredProducts.map((product) => {
                 const unavailable = product.track_stock && product.stock_quantity <= 0;
                 return <button type="button" className="ops-pos-product" disabled={unavailable} key={product.id} onClick={() => addToCart(product)}>
-                  <span className="ops-pos-product__symbol">{product.name.slice(0, 1).toUpperCase()}<b>＋</b></span>
+                  <span className={product.image_url ? 'ops-pos-product__symbol ops-pos-product__symbol--media' : 'ops-pos-product__symbol'}>
+                    {product.image_url ? <img src={mediaUrl(product.image_url)} alt="" /> : product.name.slice(0, 1).toUpperCase()}<b>＋</b>
+                  </span>
                   <strong>{product.name}</strong><small>{product.sku}{product.track_stock ? ` · ${product.stock_quantity} un.` : ''}</small>
                   <span className="ops-pos-product__price">{money(product.unit_price_cents)}</span>
                   {unavailable && <i className="ops-pos-product__unavailable">Sem stock</i>}
@@ -165,6 +271,7 @@ export function SalesPage({ companyId }: { companyId: string }) {
           <div className="ops-cart-lines">
             {cartEntries.map((product) => (
               <div className="ops-cart-line" key={product.id}>
+                {product.image_url && <img className="ops-cart-line__thumb" src={mediaUrl(product.image_url)} alt="" />}
                 <span className="ops-cart-line__info"><strong>{product.name}</strong><small>{money(product.unit_price_cents)} cada</small></span>
                 <span className="ops-quantity"><button type="button" onClick={() => changeQuantity(product.id, -1)} aria-label={`Remover uma unidade de ${product.name}`}>−</button><strong>{cart[product.id]}</strong><button type="button" disabled={product.track_stock && cart[product.id] >= product.stock_quantity} onClick={() => changeQuantity(product.id, 1)} aria-label={`Adicionar uma unidade de ${product.name}`}>＋</button></span>
               </div>
@@ -184,7 +291,8 @@ export function SalesPage({ companyId }: { companyId: string }) {
           {paymentMode === 'partial' && paidCents !== null && paidCents >= 0 && paidCents < totalCents && !selectedCustomerId && <small className="ops-form-help">Selecione um cliente para registar o saldo em aberto.</small>}
           {paymentMode === 'partial' && (paidCents === null || paidCents > totalCents) && <small className="ops-form-help">Indique um valor válido, até ao total da venda.</small>}
           <button className="button button--primary button--full ops-checkout" type="button" disabled={!canCheckout || busy} onClick={() => void checkout()}>{busy ? 'A registar venda…' : 'Confirmar venda'} <span aria-hidden="true">→</span></button>
-          {cartEntries.length > 0 && totalCents === 0 && <small className="ops-form-help">O total precisa ser maior que zero para emitir o documento fiscal.</small>}
+          {!cashOpen && <small className="ops-form-help">Abra o caixa para concluir vendas.</small>}
+          {cashOpen && cartEntries.length > 0 && totalCents === 0 && <small className="ops-form-help">O total precisa ser maior que zero para emitir o documento fiscal.</small>}
           {!canCheckout && cartEntries.some((product) => product.track_stock && product.stock_quantity < cart[product.id]) && <small className="ops-form-help">Quantidade superior ao stock disponível. Ajuste o stock ou reduza os artigos.</small>}
           <small className="ops-pos-footnote">Os preços e impostos são recalculados pela API a partir do catálogo.</small>
         </aside>
@@ -192,9 +300,9 @@ export function SalesPage({ companyId }: { companyId: string }) {
 
       <section className="ops-card">
         <div className="ops-card-heading"><div><h2>Vendas recentes</h2><p>Últimos registos da empresa</p></div><button type="button" className="ops-icon-button" aria-label="Atualizar vendas" onClick={() => void loadData()}>↻</button></div>
-        <div className="ops-table-wrap"><table className="ops-table"><thead><tr><th>Número</th><th>Data</th><th>Estado</th><th>Total</th><th>Recebido</th><th>Documento fiscal</th></tr></thead><tbody>
-          {sales.map((sale) => <tr key={sale.id}><td><strong>#{sale.number}</strong></td><td>{dateTime(sale.created_at)}</td><td><span className={`ops-sale-status ops-sale-status--${sale.status}`}>{sale.status === 'paid' ? 'Pago' : sale.status === 'cancelled' ? 'Anulado' : sale.status === 'partially_paid' ? 'Parcial' : 'Em aberto'}</span></td><td><strong>{money(sale.total_cents)}</strong></td><td>{money(sale.paid_cents)}</td><td>{sale.invoice_document_id ? <button type="button" className="ops-text-button" onClick={() => setSheetDocumentId(sale.invoice_document_id)}>{sale.invoice_document_number} · Ver fatura</button> : '—'}</td></tr>)}
-          {!sales.length && <tr><td className="ops-table-empty" colSpan={6}>As vendas concluídas aparecerão aqui.</td></tr>}
+        <div className="ops-table-wrap"><table className="ops-table"><thead><tr><th>Número</th><th>Data</th><th>Estado</th><th>Total</th><th>Recebido</th><th>Documento fiscal</th><th /></tr></thead><tbody>
+          {sales.map((sale) => <tr key={sale.id}><td><strong>#{sale.number}</strong></td><td>{dateTime(sale.created_at)}</td><td><span className={`ops-sale-status ops-sale-status--${sale.status}`}>{sale.status === 'paid' ? 'Pago' : sale.status === 'cancelled' ? 'Anulado' : sale.status === 'partially_paid' ? 'Parcial' : 'Em aberto'}</span></td><td><strong>{money(sale.total_cents)}</strong></td><td>{money(sale.paid_cents)}</td><td>{sale.invoice_document_id ? <button type="button" className="ops-text-button" onClick={() => setSheetDocumentId(sale.invoice_document_id)}>{sale.invoice_document_number} · Ver fatura</button> : '—'}</td><td>{sale.status !== 'cancelled' && sale.refunded_cents === 0 && <button type="button" className="button button--secondary document-action" disabled={busy} onClick={() => void cancelSale(sale)}>Anular</button>}</td></tr>)}
+          {!sales.length && <tr><td className="ops-table-empty" colSpan={7}>As vendas concluídas aparecerão aqui.</td></tr>}
         </tbody></table></div>
       </section>
 
