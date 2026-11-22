@@ -31,6 +31,7 @@ jobs:
           cache: npm
       - uses: dtolnay/rust-toolchain@stable
       - run: npm ci
+      - run: npm ci --prefix ./agatha-erp-desktop --no-audit --no-fund
       - name: Install Linux Tauri dependencies
         if: runner.os == 'Linux'
         run: |
