@@ -1,21 +1,17 @@
 import { useEffect, useMemo, useState } from 'react';
 import { request } from '../api/client';
 import type { CompanyFeatures, Membership, UserProfile } from '../api/types';
+import { getVertical } from '../verticals/registry';
 import { Brand } from './Brand';
 import { Icon, type IconName } from './Icon';
 import { CashRegisterPage } from './operations/CashRegisterPage';
 import { CustomersPage } from './operations/CustomersPage';
 import { DashboardPage } from './operations/DashboardPage';
 import { DocumentsPage } from './operations/DocumentsPage';
-import { BarbershopPage } from './operations/BarbershopPage';
 import { BillingPage } from './operations/BillingPage';
-import { CommercePage } from './operations/CommercePage';
-import { HospitalityPage } from './operations/HospitalityPage';
-import { PharmacyPage } from './operations/PharmacyPage';
 import { PurchasesPage } from './operations/PurchasesPage';
 import { ProductsPage } from './operations/ProductsPage';
 import { ReceivablesPage } from './operations/ReceivablesPage';
-import { RestaurantPage } from './operations/RestaurantPage';
 import { SalesPage } from './operations/SalesPage';
 import { StockPage } from './operations/StockPage';
 
@@ -32,14 +28,6 @@ const coreNavigation: Array<{ id: View; label: string; icon: IconName; module: s
   { id: 'customers', label: 'Clientes', icon: 'users', module: 'customers' },
   { id: 'stock', label: 'Stock', icon: 'layers', module: 'inventory' },
 ];
-
-const verticalIcons: Record<string, IconName> = {
-  commerce: 'store',
-  restaurant: 'utensils',
-  barbershop: 'scissors',
-  pharmacy: 'pill',
-  hospitality: 'bed',
-};
 
 export function OperationalWorkspace({
   profile,
@@ -94,8 +82,8 @@ export function OperationalWorkspace({
         : coreNavigation),
       ...(features?.packs.filter((pack) => pack.enabled && pack.is_primary).map((pack) => ({
         id: `industry:${pack.code}`,
-        label: pack.name,
-        icon: verticalIcons[pack.code] || ('spark' as IconName),
+        label: getVertical(pack.code)?.name || pack.name,
+        icon: getVertical(pack.code)?.icon || ('spark' as IconName),
       })) || []),
       ...(canManageBilling ? [{ id: 'billing', label: 'Plano e teste', icon: 'card' as IconName, module: '' }] : []),
     ], [billingOnly, canManageBilling, features]);
@@ -199,11 +187,12 @@ export function OperationalWorkspace({
           {view === 'stock' && <StockPage key={`stock-${refreshKey}`} companyId={companyId} />}
           {view === 'sales' && <SalesPage key={`sales-${refreshKey}`} companyId={companyId} />}
           {view === 'billing' && <BillingPage key={`billing-${companyId}`} companyId={companyId} canManage={canManageBilling} onSubscriptionChange={onSubscriptionChange} />}
-          {view === 'industry:commerce' && <CommercePage key={`commerce-${refreshKey}`} companyId={companyId} />}
-          {view === 'industry:restaurant' && <RestaurantPage key={`restaurant-${refreshKey}`} companyId={companyId} />}
-          {view === 'industry:barbershop' && <BarbershopPage key={`barbershop-${refreshKey}`} companyId={companyId} />}
-          {view === 'industry:pharmacy' && <PharmacyPage key={`pharmacy-${refreshKey}`} companyId={companyId} />}
-          {view === 'industry:hospitality' && <HospitalityPage key={`hospitality-${refreshKey}`} companyId={companyId} />}
+          {view.startsWith('industry:') && (() => {
+            const vertical = getVertical(view.slice('industry:'.length));
+            if (!vertical) return null;
+            const VerticalPage = vertical.component;
+            return <VerticalPage key={`${vertical.code}-${refreshKey}`} companyId={companyId} />;
+          })()}
         </div>
         <footer className="ops-footer">Ágata ERP <span>·</span> Todos os direitos reservados · Nobug Labs</footer>
       </main>

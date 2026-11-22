@@ -1,0 +1,37 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Ágata ERP",
+  "version": "0.1.0",
+  "identifier": "ao.nobuglabs.agatha.erp",
+  "build": {
+    "beforeDevCommand": "npm --prefix ../../ run dev",
+    "beforeBuildCommand": "npm --prefix ../../ run build",
+    "devUrl": "http://localhost:3002",
+    "frontendDist": "../../dist"
+  },
+  "app": {
+    "security": {
+      "csp": null
+    },
+    "windows": [
+      {
+        "label": "main",
+        "title": "Ágata ERP",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 1024,
+        "minHeight": 700,
+        "resizable": true,
+        "fullscreen": false,
+        "center": true
+      }
+    ]
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/icon.png"
+    ]
+  }
+}

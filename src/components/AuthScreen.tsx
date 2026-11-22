@@ -1,22 +1,15 @@
 import { useState, type FormEvent } from 'react';
 import { ApiError, request, saveTokens } from '../api/client';
 import type { CompanyInput, TokenResponse } from '../api/types';
+import { verticalRegistry } from '../verticals/registry';
 import { Brand } from './Brand';
-import { Icon, type IconName } from './Icon';
+import { Icon } from './Icon';
 
 interface RegisterResponse {
   company_id: string;
   status: string;
   tokens: TokenResponse;
 }
-
-const businessTypes: ReadonlyArray<{ code: string; name: string; description: string; icon: IconName }> = [
-  { code: 'commerce', name: 'Comércio', description: 'Vendas rápidas, stock, promoções e devoluções.', icon: 'store' },
-  { code: 'restaurant', name: 'Restaurante', description: 'Mesas, pedidos, cozinha e contas.', icon: 'utensils' },
-  { code: 'barbershop', name: 'Barbearia', description: 'Agenda, profissionais, serviços e comissões.', icon: 'scissors' },
-  { code: 'pharmacy', name: 'Farmácia', description: 'Lotes, validade, prescrições e dispensa.', icon: 'pill' },
-  { code: 'hospitality', name: 'Hotelaria', description: 'Quartos, reservas, estadias e limpeza.', icon: 'bed' },
-];
 
 export function AuthScreen({
   onAuthenticated,
@@ -150,7 +143,7 @@ export function AuthScreen({
                   <legend>Qual é o tipo de negócio?</legend>
                   <p>Este espaço será configurado para esta atividade e não poderá ser alterado depois.</p>
                   <div className="business-type-grid">
-                    {businessTypes.map((type) => (
+                    {verticalRegistry.map((type) => (
                       <label className={industryCode === type.code ? 'business-type-card business-type-card--selected' : 'business-type-card'} key={type.code}>
                         <input
                           type="radio"

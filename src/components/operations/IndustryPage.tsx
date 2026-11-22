@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { request } from '../../api/client';
 import type { CompanyFeatures } from '../../api/types';
+import { getVertical } from '../../verticals/registry';
 import { getErrorMessage } from './shared';
 
 interface IndustryPack {
@@ -16,22 +17,6 @@ interface IndustryPacksResponse {
   available: IndustryPack[];
   selected: Array<{ pack_code: string; name: string; enabled: boolean; is_primary: boolean }>;
 }
-
-const verticalIntros: Record<string, string> = {
-  commerce: 'Venda no balcão com pesquisa, códigos de barras, promoções e devoluções.',
-  restaurant: 'Mesas, pedidos, menu e o ritmo entre sala e cozinha.',
-  barbershop: 'Profissionais, serviços, agenda e comissões num só espaço.',
-  pharmacy: 'Stock farmacêutico, lotes, validade e dispensa controlada.',
-  hospitality: 'Quartos, reservas, estadias, check-in e housekeeping.',
-};
-
-const verticalIcons: Record<string, string> = {
-  commerce: '▣',
-  restaurant: '♨',
-  barbershop: '✂',
-  pharmacy: '+',
-  hospitality: '⌂',
-};
 
 export function IndustrySettingsPage({
   companyId,
@@ -96,7 +81,9 @@ export function IndustrySettingsPage({
       {loading ? <div className="workspace-loading"><span className="loading-dot" />A carregar tipos de negócio…</div> : (
         <>
           <div className="business-choice__grid">
-            {catalog.map((pack) => (
+            {catalog.map((pack) => {
+              const vertical = getVertical(pack.code);
+              return (
               <label className={selectedCode === pack.code ? 'business-choice-card business-choice-card--selected' : 'business-choice-card'} key={pack.code}>
                 <input
                   type="radio"
@@ -106,14 +93,15 @@ export function IndustrySettingsPage({
                   disabled={!canManage}
                   onChange={() => setSelectedCode(pack.code)}
                 />
-                <span className="business-choice-card__icon" aria-hidden="true">{verticalIcons[pack.code] || '◇'}</span>
+                <span className="business-choice-card__icon" aria-hidden="true">{vertical?.emblem || '◇'}</span>
                 <span className="business-choice-card__copy">
                   <strong>{pack.name}</strong>
-                  <small>{verticalIntros[pack.code] || pack.description}</small>
+                  <small>{vertical?.description || pack.description}</small>
                 </span>
                 <span className="business-choice-card__check" aria-hidden="true">✓</span>
               </label>
-            ))}
+              );
+            })}
           </div>
           {canManage
             ? <button type="button" className="button button--primary" disabled={busy || !selectedCode} onClick={() => void save()}>{busy ? 'A guardar…' : 'Confirmar tipo de negócio'}</button>
