@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { request } from '../../api/client';
 import type { Page } from '../../api/types';
-import type { Sale } from './shared';
-import { dateTime, getErrorMessage, listPage, money } from './shared';
+import type { Sale } from '../../components/operations/shared';
+import { dateTime, getErrorMessage, listPage, money } from '../../components/operations/shared';
 
 interface PosProduct {
   id: string;

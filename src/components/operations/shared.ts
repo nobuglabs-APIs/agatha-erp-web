@@ -50,6 +50,9 @@ export interface Sale {
   invoice_document_id: string | null;
   invoice_document_number: string | null;
   invoice_document_type: string | null;
+  offline_idempotency_key?: string;
+  offline_sync_status?: 'pending' | 'failed';
+  offline_sync_error?: string | null;
 }
 
 export interface StockMovement {

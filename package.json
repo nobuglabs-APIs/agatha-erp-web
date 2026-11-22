@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite --port 3002 --host 0.0.0.0",
+    "dev:desktop": "vite --mode desktop --port 3002 --host 0.0.0.0",
     "build": "tsc -b && vite build",
+    "build:desktop": "tsc -b && vite build --mode desktop",
     "preview": "vite preview --port 3002 --host 0.0.0.0",
     "lint": "tsc --noEmit"
   },

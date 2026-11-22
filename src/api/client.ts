@@ -1,4 +1,5 @@
 import type { TokenResponse } from './types';
+import { cacheResponse, readCachedResponse } from './offlineStore';
 
 const configuredApiBaseUrl = import.meta.env.VITE_AGATHA_API_BASE_URL;
 const useLocalDevProxy = import.meta.env.DEV
@@ -17,6 +18,13 @@ export class ApiError extends Error {
     super(message);
     this.name = 'ApiError';
     this.status = status;
+  }
+}
+
+export class NetworkError extends Error {
+  constructor(message = 'Não foi possível contactar a API.') {
+    super(message);
+    this.name = 'NetworkError';
   }
 }
 
@@ -86,11 +94,19 @@ async function requestResponse(
   }
   if (companyId) headers.set('X-Company-Id', companyId);
 
-  const response = await fetch(`${apiBaseUrl}${path}`, {
-    method,
-    headers,
-    body: body === undefined ? undefined : body instanceof FormData ? body : JSON.stringify(body),
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${apiBaseUrl}${path}`, {
+      method,
+      headers,
+      body: body === undefined ? undefined : body instanceof FormData ? body : JSON.stringify(body),
+    });
+  } catch (reason) {
+    if (reason instanceof TypeError) {
+      throw new NetworkError(reason.message);
+    }
+    throw reason;
+  }
   if (response.status === 401 && retry && token && await renewSession()) {
     return requestResponse(path, method, body, companyId, false, extraHeaders);
   }
@@ -129,15 +145,37 @@ export async function request<T>(
     headers?: HeadersInit;
   } = {},
 ): Promise<T> {
-  const response = await requestResponse(
-    path,
-    options.method || 'GET',
-    options.body,
-    options.companyId,
-    true,
-    options.headers,
-  );
-  return parseResponse<T>(response);
+  const method = options.method || 'GET';
+  if (method === 'GET' && options.companyId && !navigator.onLine) {
+    const cached = await readCachedResponse<T>(options.companyId, path);
+    if (cached !== undefined) return cached;
+    throw new NetworkError('Sem ligação à internet e sem dados guardados neste dispositivo.');
+  }
+  if (method === 'POST' && path === '/sales' && options.companyId && !navigator.onLine) {
+    throw new NetworkError();
+  }
+
+  try {
+    const response = await requestResponse(
+      path,
+      method,
+      options.body,
+      options.companyId,
+      true,
+      options.headers,
+    );
+    const result = await parseResponse<T>(response);
+    if (method === 'GET' && options.companyId) {
+      await cacheResponse(options.companyId, path, result);
+    }
+    return result;
+  } catch (reason) {
+    if (method === 'GET' && options.companyId && reason instanceof NetworkError) {
+      const cached = await readCachedResponse<T>(options.companyId, path);
+      if (cached !== undefined) return cached;
+    }
+    throw reason;
+  }
 }
 
 export async function requestBlob(path: string, companyId: string): Promise<Blob> {

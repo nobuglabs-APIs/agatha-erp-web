@@ -1,10 +1,10 @@
 import type { ComponentType } from 'react';
-import { BarbershopPage } from '../components/operations/BarbershopPage';
-import { CommercePage } from '../components/operations/CommercePage';
-import { HospitalityPage } from '../components/operations/HospitalityPage';
-import { PharmacyPage } from '../components/operations/PharmacyPage';
-import { RestaurantPage } from '../components/operations/RestaurantPage';
 import type { IconName } from '../components/Icon';
+import { BarbershopPage } from './barbershop';
+import { CommercePage } from './commerce';
+import { HospitalityPage } from './hospitality';
+import { PharmacyPage } from './pharmacy';
+import { RestaurantPage } from './restaurant';
 
 export type VerticalCode =
   | 'commerce'

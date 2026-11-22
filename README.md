@@ -4,8 +4,8 @@ Interface web do Ágata ERP para as empresas e respetivas equipas. O backoffice 
 
 ## Executar localmente
 
-1. Copie `.env.example` para `.env.local`; por omissão, a interface usa a API de teste em `http://102.37.1.46:8083`.
-2. Para usar uma API local, defina `VITE_AGATHA_API_BASE_URL=http://localhost:8080/api/v1`; o Vite encaminha `/api` e `/media` para essa API.
+1. Copie `.env.example` para `.env.local`; por omissão, a interface usa a API local em `http://localhost:8080`.
+2. O Vite encaminha `/api` e `/media` para essa API local.
 3. Instale dependências e inicie o frontend:
 
 ```powershell
@@ -32,7 +32,12 @@ O frontend abre em `http://localhost:3002`, sem partilhar a porta dos outros por
 - Ponto de venda: selecionar artigos e cliente, cobrar por diferentes métodos ou registar venda a crédito. A API calcula os valores finais e movimenta o stock atomicamente.
 - Faturas: escolher cliente e artigos, emitir a fatura numa só ação (o stock controlado é atualizado na emissão) e descarregar o PDF. Se a emissão falhar após guardar, o rascunho fica disponível para nova tentativa.
 
-Compras e verticais serão integrados nas próximas etapas. A informação e as ações apresentadas respeitam o estado, os módulos e as permissões devolvidas pela API.
+Compras e verticais estão integrados no espaço operacional. A informação e as ações apresentadas respeitam o estado, os módulos e as permissões devolvidas pela API.
+
+As páginas específicas de Comércio, Restaurante, Barbearia, Farmácia e
+Hotelaria vivem em `src/verticals/<vertical>/`; `src/verticals/registry.tsx`
+regista a identidade, o ícone e a página de cada vertical. Componentes comuns
+continuam em `src/components/operations/`.
 
 Para produção, use um URL HTTPS e permita no `CORS_ORIGINS` da API a origem pública do frontend. A URL HTTP do VPS está configurada apenas para testes.
 

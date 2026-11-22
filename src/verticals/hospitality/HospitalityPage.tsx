@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { request } from '../../api/client';
 import type { Page } from '../../api/types';
-import { dateTime, getErrorMessage, money } from './shared';
+import { dateTime, getErrorMessage, money } from '../../components/operations/shared';
 
 interface Room {
   id: string;

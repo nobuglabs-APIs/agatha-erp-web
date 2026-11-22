@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { request } from '../../api/client';
+import { NetworkError, request } from '../../api/client';
+import { syncPendingSales } from '../../api/offlineSync';
+import {
+  listenOfflineChanges,
+  listPendingSales,
+  queuePendingSale,
+  retryPendingSale,
+} from '../../api/offlineStore';
 import type { Customer, Product, Sale } from './shared';
 import { dateTime, getErrorMessage, listPage, money, parseAmountCents } from './shared';
 import { DocumentSheet } from './DocumentSheet';
@@ -34,14 +41,22 @@ export function SalesPage({ companyId }: { companyId: string }) {
     setLoading(true);
     setError('');
     try {
-      const [productResult, customerResult, salesResult] = await Promise.all([
+      const [productResult, customerResult, salesResult, pendingSales] = await Promise.all([
         listPage<Product>('/products', companyId, 100),
         listPage<Customer>('/customers', companyId, 100),
         listPage<Sale>('/sales', companyId, 10),
+        listPendingSales<Sale>(companyId),
       ]);
       setProducts(productResult.items);
       setCustomers(customerResult.items);
-      setSales(salesResult.items);
+      setSales([
+        ...pendingSales.map((pending) => ({
+          ...pending.preview,
+          offline_sync_status: pending.status,
+          offline_sync_error: pending.error,
+        })),
+        ...salesResult.items,
+      ]);
     } catch (reason) {
       setError(getErrorMessage(reason, 'Não foi possível carregar o ponto de venda.'));
     } finally {
@@ -50,6 +65,9 @@ export function SalesPage({ companyId }: { companyId: string }) {
   }, [companyId]);
 
   useEffect(() => { void loadData(); }, [loadData]);
+  useEffect(() => listenOfflineChanges((changedCompanyId) => {
+    if (changedCompanyId === companyId) void loadData();
+  }), [companyId, loadData]);
 
   const filteredProducts = useMemo(() => {
     const query = productQuery.trim().toLocaleLowerCase();
@@ -96,22 +114,81 @@ export function SalesPage({ companyId }: { companyId: string }) {
     });
   }
 
+  async function retrySale(sale: Sale) {
+    if (!sale.offline_idempotency_key) {
+      setError('Não foi possível identificar a venda offline para tentar novamente.');
+      return;
+    }
+    setBusy(true);
+    setError('');
+    try {
+      await retryPendingSale(companyId, sale.offline_idempotency_key);
+      await syncPendingSales(companyId);
+      await loadData();
+    } catch (reason) {
+      setError(getErrorMessage(reason, 'Não foi possível tentar sincronizar a venda novamente.'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function checkout() {
     if (!canCheckout) return;
     setBusy(true);
     setError('');
     setNotice('');
     try {
-      const sale = await request<Sale>('/sales', {
-        method: 'POST',
-        companyId,
-        headers: { 'Idempotency-Key': crypto.randomUUID() },
-        body: {
+      const idempotencyKey = crypto.randomUUID();
+      const payload = {
+        customer_id: selectedCustomerId || null,
+        items: cartEntries.map((product) => ({ product_id: product.id, quantity: cart[product.id] })),
+        payments: paidCents ? [{ method: paymentMethod, amount_cents: paidCents }] : [],
+      };
+      let sale: Sale;
+      try {
+        sale = await request<Sale>('/sales', {
+          method: 'POST',
+          companyId,
+          headers: { 'Idempotency-Key': idempotencyKey },
+          body: payload,
+        });
+      } catch (reason) {
+        if (!(reason instanceof NetworkError)) throw reason;
+        const preview: Sale = {
+          id: `offline:${idempotencyKey}`,
+          offline_idempotency_key: idempotencyKey,
+          number: 0,
           customer_id: selectedCustomerId || null,
-          items: cartEntries.map((product) => ({ product_id: product.id, quantity: cart[product.id] })),
-          payments: paidCents ? [{ method: paymentMethod, amount_cents: paidCents }] : [],
-        },
-      });
+          status: 'pending_sync',
+          subtotal_cents: subtotalCents,
+          tax_cents: taxCents,
+          discount_cents: 0,
+          total_cents: totalCents,
+          paid_cents: paidCents,
+          refunded_cents: 0,
+          created_at: new Date().toISOString(),
+          invoice_document_id: null,
+          invoice_document_number: null,
+          invoice_document_type: null,
+          offline_sync_status: 'pending',
+        };
+        await queuePendingSale({
+          idempotencyKey,
+          companyId,
+          payload,
+          preview,
+          createdAt: preview.created_at,
+          status: 'pending',
+          error: null,
+        });
+        setNotice('Venda guardada neste dispositivo. Valores, stock e documento fiscal serão confirmados pela API ao sincronizar.');
+        setCart({});
+        setSelectedCustomerId('');
+        setPaymentMode('full');
+        setPartialAmountInput('');
+        await loadData();
+        return;
+      }
       const documentLabel = sale.invoice_document_type === 'invoice_receipt' ? 'fatura-recibo' : 'fatura';
       setNotice(sale.invoice_document_number
         ? `Venda #${sale.number} registada e ${documentLabel} ${sale.invoice_document_number} emitida.`
@@ -193,7 +270,7 @@ export function SalesPage({ companyId }: { companyId: string }) {
       <section className="ops-card">
         <div className="ops-card-heading"><div><h2>Vendas recentes</h2><p>Últimos registos da empresa</p></div><button type="button" className="ops-icon-button" aria-label="Atualizar vendas" onClick={() => void loadData()}>↻</button></div>
         <div className="ops-table-wrap"><table className="ops-table"><thead><tr><th>Número</th><th>Data</th><th>Estado</th><th>Total</th><th>Recebido</th><th>Documento fiscal</th></tr></thead><tbody>
-          {sales.map((sale) => <tr key={sale.id}><td><strong>#{sale.number}</strong></td><td>{dateTime(sale.created_at)}</td><td><span className={`ops-sale-status ops-sale-status--${sale.status}`}>{sale.status === 'paid' ? 'Pago' : sale.status === 'cancelled' ? 'Anulado' : sale.status === 'partially_paid' ? 'Parcial' : 'Em aberto'}</span></td><td><strong>{money(sale.total_cents)}</strong></td><td>{money(sale.paid_cents)}</td><td>{sale.invoice_document_id ? <button type="button" className="ops-text-button" onClick={() => setSheetDocumentId(sale.invoice_document_id)}>{sale.invoice_document_number} · Ver fatura</button> : '—'}</td></tr>)}
+          {sales.map((sale) => <tr key={sale.id}><td><strong>{sale.status === 'pending_sync' ? 'Pendente' : `#${sale.number}`}</strong></td><td>{dateTime(sale.created_at)}</td><td><span className={`ops-sale-status ops-sale-status--${sale.offline_sync_status === 'failed' ? 'sync-failed' : sale.status}`}>{sale.offline_sync_status === 'failed' ? 'Requer atenção' : sale.offline_sync_status === 'pending' ? 'A sincronizar' : sale.status === 'paid' ? 'Pago' : sale.status === 'cancelled' ? 'Anulado' : sale.status === 'partially_paid' ? 'Parcial' : 'Em aberto'}</span>{sale.offline_sync_error && <small className="ops-offline-error">{sale.offline_sync_error}</small>}{sale.offline_sync_status === 'failed' && <button type="button" className="ops-text-button" disabled={busy} onClick={() => void retrySale(sale)}>Tentar novamente</button>}</td><td><strong>{money(sale.total_cents)}</strong></td><td>{money(sale.paid_cents)}</td><td>{sale.invoice_document_id ? <button type="button" className="ops-text-button" onClick={() => setSheetDocumentId(sale.invoice_document_id)}>{sale.invoice_document_number} · Ver fatura</button> : sale.offline_sync_status === 'pending' ? 'Emitido após sincronização' : '—'}</td></tr>)}
           {!sales.length && <tr><td className="ops-table-empty" colSpan={6}>As vendas concluídas aparecerão aqui.</td></tr>}
         </tbody></table></div>
       </section>

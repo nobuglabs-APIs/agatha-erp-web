@@ -994,6 +994,11 @@ img { max-width: 100%; }
 .ops-sale-status--paid { color: var(--success); }
 .ops-sale-status--unpaid, .ops-sale-status--partially_paid { color: var(--warning); }
 .ops-sale-status--cancelled { color: var(--danger); }
+.ops-sale-status--pending_sync { color: var(--warning); }
+.ops-sale-status--sync-failed { color: var(--danger); }
+.ops-offline-error { display: block; max-width: 220px; color: var(--danger); font-size: 9px; }
+.ops-live--offline { color: var(--danger); }
+.ops-live--offline i { background: var(--danger); box-shadow: 0 0 0 3px rgb(195 74 64 / 14%); }
 
 .ops-empty-inline { display: grid; min-height: 160px; align-content: center; justify-items: center; gap: 6px; color: var(--faint); }
 .ops-empty-inline > span { display: grid; width: 38px; height: 38px; place-items: center; margin-bottom: 3px; border-radius: 12px; background: var(--brand-soft); color: var(--brand-strong); font-size: 17px; }

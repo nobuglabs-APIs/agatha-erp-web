@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { request } from '../../api/client';
 import type { Page } from '../../api/types';
-import type { Product } from './shared';
-import { dateTime, getErrorMessage, money, listPage } from './shared';
+import type { Product } from '../../components/operations/shared';
+import { dateTime, getErrorMessage, money, listPage } from '../../components/operations/shared';
 
 interface Professional {
   id: string;

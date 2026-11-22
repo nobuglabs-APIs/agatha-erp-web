@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { request } from '../api/client';
+import { syncPendingSales } from '../api/offlineSync';
+import { listenOfflineChanges, listPendingSales } from '../api/offlineStore';
 import type { CompanyFeatures, Membership, UserProfile } from '../api/types';
 import { getVertical } from '../verticals/registry';
 import { Brand } from './Brand';
@@ -54,8 +56,49 @@ export function OperationalWorkspace({
   const [refreshKey, setRefreshKey] = useState(0);
   const [features, setFeatures] = useState<CompanyFeatures | null>(null);
   const [featuresError, setFeaturesError] = useState('');
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [pendingSaleCount, setPendingSaleCount] = useState(0);
+  const [syncError, setSyncError] = useState('');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const canManageBilling = Boolean(profile.companies.find((item) => item.company_id === companyId)?.is_admin);
+
+  useEffect(() => {
+    let active = true;
+    const refreshPendingCount = async () => {
+      const pending = await listPendingSales(companyId);
+      if (active) setPendingSaleCount(pending.length);
+    };
+    const synchronize = async () => {
+      setIsOnline(navigator.onLine);
+      if (!navigator.onLine) {
+        await refreshPendingCount();
+        return;
+      }
+      try {
+        await syncPendingSales(companyId);
+        if (active) setSyncError('');
+      } catch (reason) {
+        if (active) setSyncError(reason instanceof Error ? reason.message : 'Não foi possível sincronizar as vendas.');
+      }
+      await refreshPendingCount();
+    };
+    const onOffline = () => {
+      setIsOnline(false);
+      void refreshPendingCount();
+    };
+    const unsubscribe = listenOfflineChanges((changedCompanyId) => {
+      if (changedCompanyId === companyId) void refreshPendingCount();
+    });
+    window.addEventListener('online', synchronize);
+    window.addEventListener('offline', onOffline);
+    void synchronize();
+    return () => {
+      active = false;
+      unsubscribe();
+      window.removeEventListener('online', synchronize);
+      window.removeEventListener('offline', onOffline);
+    };
+  }, [companyId]);
 
   useEffect(() => {
     let active = true;
@@ -171,12 +214,13 @@ export function OperationalWorkspace({
           <div className="ops-mobile-brand"><Brand compact /></div>
           <div className="ops-breadcrumb"><span>Empresa</span><b>/</b><strong>{navigation.find((item) => item.id === view)?.label}</strong></div>
           <div className="ops-topbar__right">
-            <span className="ops-live"><i /> {billingOnly ? 'Gestão da subscrição' : 'Sistema operacional'}</span>
+            <span className={isOnline ? 'ops-live' : 'ops-live ops-live--offline'}><i /> {billingOnly ? 'Gestão da subscrição' : isOnline ? `Sistema operacional${pendingSaleCount ? ` · ${pendingSaleCount} pendente(s)` : ''}` : `Sem ligação · ${pendingSaleCount} venda(s) pendente(s)`}</span>
             <span className="avatar">{profile.full_name.slice(0, 1).toUpperCase()}</span>
           </div>
         </header>
         <div className="ops-content">
           {featuresError && <div className="ops-alert ops-alert--error" role="alert">{featuresError}</div>}
+          {syncError && <div className="ops-alert ops-alert--warning" role="status">{syncError}</div>}
           {view === 'overview' && <DashboardPage key={`dashboard-${refreshKey}`} companyId={companyId} onNavigate={navigate} />}
           {view === 'products' && <ProductsPage key={`products-${refreshKey}`} companyId={companyId} />}
           {view === 'documents' && <DocumentsPage key={`documents-${refreshKey}`} companyId={companyId} />}
