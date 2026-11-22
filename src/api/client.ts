@@ -2,14 +2,21 @@ import type { TokenResponse } from './types';
 import { cacheResponse, readCachedResponse } from './offlineStore';
 
 const configuredApiBaseUrl = import.meta.env.VITE_AGATHA_API_BASE_URL;
+const isDesktopRuntime = typeof window !== 'undefined'
+  && ('__TAURI_INTERNALS__' in window || '__TAURI__' in window);
 const useLocalDevProxy = import.meta.env.DEV
   && (!configuredApiBaseUrl || /^https?:\/\/(localhost|127\.0\.0\.1):8080\/api\/v1\/?$/i.test(configuredApiBaseUrl));
-const apiBaseUrl = (import.meta.env.PROD || useLocalDevProxy
-  ? '/api/v1'
-  : configuredApiBaseUrl || 'http://localhost:8080/api/v1')
-  .replace(/\/+$/, '');
+const apiBaseUrl = (isDesktopRuntime
+  ? configuredApiBaseUrl || 'http://localhost:8080/api/v1'
+  : import.meta.env.PROD || useLocalDevProxy
+    ? '/api/v1'
+    : configuredApiBaseUrl || 'http://localhost:8080/api/v1'
+).replace(/\/+$/, '');
 const ACCESS_TOKEN_KEY = 'agatha_access_token';
 const REFRESH_TOKEN_KEY = 'agatha_refresh_token';
+const isDesktop = typeof window !== 'undefined'
+  && ('__TAURI_INTERNALS__' in window || '__TAURI__' in window);
+const persistentStorage = isDesktop ? localStorage : sessionStorage;
 
 export class ApiError extends Error {
   readonly status: number;
@@ -31,15 +38,30 @@ export class NetworkError extends Error {
 export function saveTokens(tokens: TokenResponse): void {
   sessionStorage.setItem(ACCESS_TOKEN_KEY, tokens.access_token);
   sessionStorage.setItem(REFRESH_TOKEN_KEY, tokens.refresh_token);
+  if (isDesktop) {
+    persistentStorage.setItem(ACCESS_TOKEN_KEY, tokens.access_token);
+    persistentStorage.setItem(REFRESH_TOKEN_KEY, tokens.refresh_token);
+  }
 }
 
 export function clearTokens(): void {
   sessionStorage.removeItem(ACCESS_TOKEN_KEY);
   sessionStorage.removeItem(REFRESH_TOKEN_KEY);
+  if (isDesktop) {
+    localStorage.removeItem(ACCESS_TOKEN_KEY);
+    localStorage.removeItem(REFRESH_TOKEN_KEY);
+  }
 }
 
 export function hasSession(): boolean {
-  return sessionStorage.getItem(ACCESS_TOKEN_KEY) !== null;
+  if (sessionStorage.getItem(ACCESS_TOKEN_KEY) !== null) return true;
+  if (!isDesktop) return false;
+  const accessToken = localStorage.getItem(ACCESS_TOKEN_KEY);
+  const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
+  if (!accessToken) return false;
+  sessionStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
+  if (refreshToken) sessionStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+  return true;
 }
 
 export async function logoutSession(): Promise<void> {

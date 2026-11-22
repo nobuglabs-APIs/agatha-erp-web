@@ -19,6 +19,7 @@ const DATABASE_VERSION = 1;
 const RESPONSE_STORE = 'responses';
 const PENDING_SALE_STORE = 'pending-sales';
 const CHANGE_EVENT = 'agatha:offline-change';
+const SESSION_PROFILE_KEY = 'agatha-session-profile';
 
 let databasePromise: Promise<IDBDatabase> | undefined;
 
@@ -157,4 +158,27 @@ export function listenOfflineChanges(handler: (companyId: string) => void): () =
   };
   window.addEventListener(CHANGE_EVENT, listener);
   return () => window.removeEventListener(CHANGE_EVENT, listener);
+}
+
+export async function cacheSessionProfile<T>(profile: T): Promise<void> {
+  const database = await openDatabase();
+  const transaction = database.transaction(RESPONSE_STORE, 'readwrite');
+  const done = transactionDone(transaction);
+  transaction.objectStore(RESPONSE_STORE).put({
+    key: SESSION_PROFILE_KEY,
+    value: profile,
+    cachedAt: new Date().toISOString(),
+  } satisfies CachedResponse);
+  await done;
+}
+
+export async function readCachedSessionProfile<T>(): Promise<T | undefined> {
+  const database = await openDatabase();
+  const transaction = database.transaction(RESPONSE_STORE, 'readonly');
+  const done = transactionDone(transaction);
+  const record = await requestResult(
+    transaction.objectStore(RESPONSE_STORE).get(SESSION_PROFILE_KEY),
+  ) as CachedResponse | undefined;
+  await done;
+  return record?.value as T | undefined;
 }

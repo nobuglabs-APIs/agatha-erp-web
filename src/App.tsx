@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ApiError, clearTokens, hasSession, logoutSession, request } from './api/client';
+import { ApiError, clearTokens, hasSession, logoutSession, NetworkError, request } from './api/client';
+import { cacheSessionProfile, readCachedSessionProfile } from './api/offlineStore';
 import type { UserProfile } from './api/types';
 import { AuthScreen } from './components/AuthScreen';
 import { Brand } from './components/Brand';
@@ -19,6 +20,7 @@ export default function App() {
     try {
       const current = await request<UserProfile>('/auth/me');
       setProfile(current);
+      await cacheSessionProfile(current);
       const rememberedCompany = sessionStorage.getItem('agatha_company_id');
       const nextCompanyId = current.companies.some((item) => item.company_id === rememberedCompany)
         ? rememberedCompany || ''
@@ -29,6 +31,18 @@ export default function App() {
         clearTokens();
         setAuthenticated(false);
         setProfile(null);
+      } else if (reason instanceof NetworkError) {
+        const cached = await readCachedSessionProfile<UserProfile>();
+        if (cached) {
+          setProfile(cached);
+          const rememberedCompany = sessionStorage.getItem('agatha_company_id');
+          const nextCompanyId = cached.companies.some((item) => item.company_id === rememberedCompany)
+            ? rememberedCompany || ''
+            : cached.companies[0]?.company_id || '';
+          setSelectedCompanyId(nextCompanyId);
+        } else {
+          setError(reason.message);
+        }
       } else {
         setError(reason instanceof Error ? reason.message : 'Não foi possível carregar a sessão.');
       }
