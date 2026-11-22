@@ -42,7 +42,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          projectPath: ./agatha-erp-desktop/src-tauri
+          projectPath: ./agatha-erp-desktop
           tagName: ${{ github.ref_name }}
           releaseName: "Ágata ERP ${{ github.ref_name }}"
           releaseDraft: true
