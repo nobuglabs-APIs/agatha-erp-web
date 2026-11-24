@@ -1,5 +1,6 @@
-import type { Tab } from './types';
 import { useEffect } from 'react';
+import { createPortal } from 'react-dom';
+import type { Tab } from './types';
 import { money } from '../../components/operations/shared';
 import { RestaurantPanels } from './RestaurantPanels';
 import { RestaurantOrderSheet } from './RestaurantOrderSheet';
@@ -97,7 +98,7 @@ export function RestaurantPage({
         </>
       )}
 
-      {sheet.kind !== 'none' && (
+      {sheet.kind !== 'none' && createPortal(
         <RestaurantOrderSheet
           sheet={sheet}
           onClose={() => setSheet({ kind: 'none' })}
@@ -131,7 +132,8 @@ export function RestaurantPage({
           setPaymentMethod={setPaymentMethod}
           dueNow={dueNow}
           onChargeAndClose={chargeAndClose}
-        />
+        />,
+        document.body,
       )}
     </div>
   );
