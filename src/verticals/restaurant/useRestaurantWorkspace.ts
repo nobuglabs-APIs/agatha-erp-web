@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { request } from '../../api/client';
 import type { Page } from '../../api/types';
 import { getErrorMessage, listPage, money } from '../../components/operations/shared';
@@ -15,8 +15,11 @@ import {
   type Table,
 } from './types';
 
-export function useRestaurantWorkspace(companyId: string) {
-  const [tab, setTab] = useState<Tab>('floor');
+export function useRestaurantWorkspace(
+  companyId: string,
+  tab: Tab,
+  onSelectTab: (tab: Tab) => void,
+) {
   const [tables, setTables] = useState<Table[]>([]);
   const [menu, setMenu] = useState<MenuItem[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -36,8 +39,12 @@ export function useRestaurantWorkspace(companyId: string) {
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [floorError, setFloorError] = useState('');
   const [notice, setNotice] = useState('');
   const [now, setNow] = useState(() => Date.now());
+  const [floorUpdatedAt, setFloorUpdatedAt] = useState(() => Date.now());
+  const [movingTableId, setMovingTableId] = useState('');
+  const floorRefreshInFlight = useRef(false);
 
   const loadData = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -54,7 +61,10 @@ export function useRestaurantWorkspace(companyId: string) {
       setOrders(orderPage.items.filter((order) => order.status !== 'closed' && order.status !== 'cancelled'));
       setKitchen(kitchenRows);
       setProducts(productPage.items.filter((product) => product.product_type === 'goods' && product.is_active));
-      setNow(Date.now());
+      const loadedAt = Date.now();
+      setNow(loadedAt);
+      setFloorUpdatedAt(loadedAt);
+      setFloorError('');
       setLoaded(true);
       if (!silent) setError('');
     } catch (reason) {
@@ -64,15 +74,36 @@ export function useRestaurantWorkspace(companyId: string) {
     }
   }, [companyId]);
 
+  const refreshFloor = useCallback(async () => {
+    if (tab !== 'floor' || movingTableId || floorRefreshInFlight.current) return;
+    floorRefreshInFlight.current = true;
+    try {
+      const [tableRows, orderPage] = await Promise.all([
+        request<Table[]>('/restaurant/tables', { companyId }),
+        request<Page<Order>>('/restaurant/orders?page=1&per_page=100', { companyId }),
+      ]);
+      setTables(tableRows.filter((table) => table.status !== 'inactive'));
+      setOrders(orderPage.items.filter((order) => order.status !== 'closed' && order.status !== 'cancelled'));
+      const updatedAt = Date.now();
+      setNow(updatedAt);
+      setFloorUpdatedAt(updatedAt);
+      setFloorError('');
+    } catch (reason) {
+      setFloorError(getErrorMessage(reason, 'Não foi possível atualizar a ocupação da sala.'));
+    } finally {
+      floorRefreshInFlight.current = false;
+    }
+  }, [companyId, movingTableId, tab]);
+
   useEffect(() => { void loadData(); }, [loadData]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
       if (document.hidden) return;
-      void loadData(true);
-    }, 30000);
+      void refreshFloor();
+    }, 5000);
     return () => window.clearInterval(timer);
-  }, [loadData]);
+  }, [refreshFloor]);
 
   const loadOrder = useCallback(async (orderId: string) => {
     setDetailLoading(true);
@@ -198,7 +229,7 @@ export function useRestaurantWorkspace(companyId: string) {
         },
       });
       setQuantities({});
-      setTab('floor');
+      onSelectTab('floor');
       setSheet({ kind: 'order', orderId: order.id });
       setNotice(`Pedido #${order.number} aberto.`);
       await loadData(true);
@@ -340,6 +371,7 @@ export function useRestaurantWorkspace(companyId: string) {
     event.preventDefault();
     const form = event.currentTarget;
     const data = new FormData(form);
+    const area = String(data.get('area') || '').trim() || null;
     setBusy(true);
     setError('');
     try {
@@ -349,7 +381,7 @@ export function useRestaurantWorkspace(companyId: string) {
         body: {
           code: String(data.get('code') || '').trim(),
           name: String(data.get('name') || '').trim() || null,
-          area: String(data.get('area') || '').trim() || null,
+          area,
           seats: Number(data.get('seats')),
           status: 'free',
         },
@@ -361,6 +393,37 @@ export function useRestaurantWorkspace(companyId: string) {
       setError(getErrorMessage(reason, 'Não foi possível criar a mesa.'));
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function moveTable(table: Table, position: { position_x: number; position_y: number }) {
+    if (movingTableId) return;
+    const originalPosition = { position_x: table.position_x, position_y: table.position_y };
+    setMovingTableId(table.id);
+    setError('');
+    setTables((current) => current.map((item) => item.id === table.id ? { ...item, ...position } : item));
+    try {
+      const updated = await request<Table>(`/restaurant/tables/${table.id}`, {
+        method: 'PUT',
+        companyId,
+        body: {
+          code: table.code,
+          name: table.name,
+          area: table.area,
+          seats: table.seats,
+          status: null,
+          ...position,
+        },
+      });
+      setTables((current) => current.map((item) => item.id === updated.id ? updated : item));
+      setNotice(`Mesa ${updated.code} reposicionada.`);
+    } catch (reason) {
+      setTables((current) => current.map((item) => item.id === table.id
+        ? { ...item, ...originalPosition }
+        : item));
+      setError(getErrorMessage(reason, 'Não foi possível guardar a posição da mesa.'));
+    } finally {
+      setMovingTableId('');
     }
   }
 
@@ -428,13 +491,13 @@ export function useRestaurantWorkspace(companyId: string) {
 
 
   return {
-    tab, setTab, tables, menu, orders, kitchen, products, sheet, setSheet,
+    tab, tables, menu, orders, kitchen, products, sheet, setSheet,
     detail, detailLoading, quantities, setQuantities, addQuantities, setAddQuantities,
     addMode, setAddMode, splitCount, setSplitCount, selectedSplitId, setSelectedSplitId,
     paymentMethod, setPaymentMethod, stationFilter, setStationFilter, loading, loaded,
-    busy, error, notice, now, loadData, menuByStation, areas, orderByTable,
+    busy, error, floorError, notice, now, floorUpdatedAt, movingTableId, loadData, menuByStation, areas, orderByTable,
     occupiedTables, kitchenQueue, openTotal, kitchenStations, openTable,
-    createTable, kitchenAction, addMenuItem, toggleAvailability, newOrderTotal,
+    createTable, moveTable, kitchenAction, addMenuItem, toggleAvailability, newOrderTotal,
     addTotal, tableLabel, balance, dueNow, canAddItems, action, createOrder,
     addItems, createSplits, chargeAndClose, cancelOrder,
   };

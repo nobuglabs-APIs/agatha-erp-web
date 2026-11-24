@@ -4,18 +4,31 @@ import { RestaurantPanels } from './RestaurantPanels';
 import { RestaurantOrderSheet } from './RestaurantOrderSheet';
 import { useRestaurantWorkspace } from './useRestaurantWorkspace';
 
-export function RestaurantPage({ companyId }: { companyId: string }) {
+function isRestaurantTab(value: string): value is Tab {
+  return value === 'floor' || value === 'orders' || value === 'kitchen' || value === 'menu';
+}
+
+export function RestaurantPage({
+  companyId,
+  activeTab,
+  onSelectTab,
+}: {
+  companyId: string;
+  activeTab: string;
+  onSelectTab: (tabId: string) => void;
+}) {
+  const tab = isRestaurantTab(activeTab) ? activeTab : 'floor';
   const {
-    tab, setTab, tables, menu, orders, kitchen, products, sheet, setSheet,
+    tab: currentTab, tables, menu, orders, kitchen, products, sheet, setSheet,
     detail, detailLoading, quantities, setQuantities, addQuantities, setAddQuantities,
     addMode, setAddMode, splitCount, setSplitCount, selectedSplitId, setSelectedSplitId,
     paymentMethod, setPaymentMethod, stationFilter, setStationFilter, loading, loaded,
-    busy, error, notice, now, loadData, menuByStation, areas, orderByTable,
+    busy, error, floorError, notice, now, floorUpdatedAt, movingTableId, loadData, menuByStation, areas, orderByTable,
     occupiedTables, kitchenQueue, openTotal, kitchenStations, openTable,
-    createTable, kitchenAction, addMenuItem, toggleAvailability, newOrderTotal,
+    createTable, moveTable, kitchenAction, addMenuItem, toggleAvailability, newOrderTotal,
     addTotal, tableLabel, balance, dueNow, canAddItems, action, createOrder,
     addItems, createSplits, chargeAndClose, cancelOrder,
-  } = useRestaurantWorkspace(companyId);
+  } = useRestaurantWorkspace(companyId, tab, (nextTab) => onSelectTab(nextTab));
   return (
     <div className="rs">
       <header className="rs-head">
@@ -42,26 +55,8 @@ export function RestaurantPage({ companyId }: { companyId: string }) {
         </div>
       </header>
 
-      <nav className="rs-tabs" aria-label="Áreas do restaurante">
-        {([
-          ['floor', 'Sala'],
-          ['orders', `Pedidos${orders.length ? ` · ${orders.length}` : ''}`],
-          ['kitchen', `Cozinha${kitchenQueue.length ? ` · ${kitchenQueue.length}` : ''}`],
-          ['menu', 'Menu'],
-        ] as Array<[Tab, string]>).map(([id, label]) => (
-          <button
-            key={id}
-            type="button"
-            className={tab === id ? 'rs-tab rs-tab--active' : 'rs-tab'}
-            onClick={() => setTab(id)}
-          >
-            {label}
-          </button>
-        ))}
-        <span className="rs-live"><i /> ligado · atualiza a cada 30s</span>
-      </nav>
-
       {error && <div className="rs-alert rs-alert--error" role="alert">{error}</div>}
+      {floorError && <div className="rs-alert rs-alert--error" role="alert">{floorError}</div>}
       {notice && <div className="rs-alert rs-alert--success" role="status">{notice}</div>}
 
       {loading && !loaded ? (
@@ -69,9 +64,8 @@ export function RestaurantPage({ companyId }: { companyId: string }) {
       ) : (
         <>
           <RestaurantPanels
-            tab={tab}
+            tab={currentTab}
             areas={areas}
-            tables={tables}
             orderByTable={orderByTable}
             now={now}
             orders={orders}
@@ -83,7 +77,10 @@ export function RestaurantPage({ companyId }: { companyId: string }) {
             menuByStation={menuByStation}
             products={products}
             busy={busy}
+            floorUpdatedAt={floorUpdatedAt}
+            movingTableId={movingTableId}
             onOpenTable={openTable}
+            onMoveTable={moveTable}
             onOpenOrder={(orderId) => setSheet({ kind: 'order', orderId })}
             onCreateTable={createTable}
             onKitchenAction={kitchenAction}

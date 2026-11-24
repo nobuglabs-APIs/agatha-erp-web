@@ -5,7 +5,6 @@ import {
   orderStatusLabels,
   stationLabels,
   stationOrder,
-  tableStatusLabel,
   type KitchenItem,
   type MenuItem,
   type Order,
@@ -13,11 +12,11 @@ import {
   type Tab,
   type Table,
 } from './types';
+import { RestaurantFloorPlan } from './RestaurantFloorPlan';
 
 interface RestaurantPanelsProps {
   tab: Tab;
   areas: [string, Table[]][];
-  tables: Table[];
   orderByTable: Map<string, Order>;
   now: number;
   orders: Order[];
@@ -29,7 +28,10 @@ interface RestaurantPanelsProps {
   menuByStation: [string, MenuItem[]][];
   products: Product[];
   busy: boolean;
+  floorUpdatedAt: number;
+  movingTableId: string;
   onOpenTable: (table: Table) => void;
+  onMoveTable: (table: Table, position: Pick<Table, 'position_x' | 'position_y'>) => Promise<void>;
   onOpenOrder: (orderId: string) => void;
   onCreateTable: (event: FormEvent<HTMLFormElement>) => void | Promise<void>;
   onKitchenAction: (item: KitchenItem, action: 'start' | 'ready') => void | Promise<void>;
@@ -40,7 +42,6 @@ interface RestaurantPanelsProps {
 export function RestaurantPanels({
   tab,
   areas,
-  tables,
   orderByTable,
   now,
   orders,
@@ -52,7 +53,10 @@ export function RestaurantPanels({
   menuByStation,
   products,
   busy,
+  floorUpdatedAt,
+  movingTableId,
   onOpenTable,
+  onMoveTable,
   onOpenOrder,
   onCreateTable,
   onKitchenAction,
@@ -62,47 +66,16 @@ export function RestaurantPanels({
   return (
     <>
       {tab === 'floor' && (
-        <div className="rs-floor">
-          {areas.map(([area, areaTables]) => (
-            <section className="rs-zone" key={area}>
-              <header className="rs-zone__head">
-                <h2>{area}</h2>
-                <span>{areaTables.filter((table) => table.status === 'free').length} de {areaTables.length} livres</span>
-              </header>
-              <div className="rs-tables">
-                {areaTables.map((table) => {
-                  const order = orderByTable.get(table.id);
-                  const minutes = order ? elapsedMinutes(order.created_at, now) : 0;
-                  return (
-                    <button
-                      key={table.id}
-                      type="button"
-                      className={`rs-table rs-table--${order ? 'busy' : table.status}`}
-                      onClick={() => onOpenTable(table)}
-                    >
-                      <span className="rs-table__code">{table.code}</span>
-                      <span className="rs-table__seats">{table.seats} lugares</span>
-                      {order ? (
-                        <>
-                          <span className="rs-table__order">#{order.number}</span>
-                          <span className="rs-table__amount">{money(order.total_cents)}</span>
-                          <span className="rs-table__meta">{minutes} min · {orderStatusLabels[order.status]}</span>
-                        </>
-                      ) : (
-                        <span className="rs-table__state">{tableStatusLabel(table.status)}</span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            </section>
-          ))}
-          {!tables.length && (
-            <div className="rs-empty">
-              <strong>A sala ainda não está configurada</strong>
-              <p>Crie as mesas em “Menu → Configurar sala” para começar a abrir pedidos.</p>
-            </div>
-          )}
+        <>
+          <RestaurantFloorPlan
+            areas={areas}
+            orderByTable={orderByTable}
+            now={now}
+            updatedAt={floorUpdatedAt}
+            movingTableId={movingTableId}
+            onOpenTable={onOpenTable}
+            onMoveTable={onMoveTable}
+          />
 
           <details className="rs-config">
             <summary>Configurar sala</summary>
@@ -114,7 +87,7 @@ export function RestaurantPanels({
               <button className="rs-btn" type="submit" disabled={busy}>Adicionar mesa</button>
             </form>
           </details>
-        </div>
+        </>
       )}
 
       {tab === 'orders' && (

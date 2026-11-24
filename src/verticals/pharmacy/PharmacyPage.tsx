@@ -3,6 +3,7 @@ import { request } from '../../api/client';
 import type { Page } from '../../api/types';
 import type { Product } from '../../components/operations/shared';
 import { dateTime, getErrorMessage, listPage, money } from '../../components/operations/shared';
+import { VerticalWorkspacePanel } from '../VerticalWorkspacePanel';
 
 interface PharmacyProduct {
   product_id: string;
@@ -83,7 +84,7 @@ function today() {
   return new Date().toISOString().slice(0, 10);
 }
 
-export function PharmacyPage({ companyId }: { companyId: string }) {
+export function PharmacyPage({ companyId, activeTab }: { companyId: string; activeTab: string }) {
   const [products, setProducts] = useState<Product[]>([]);
   const [configured, setConfigured] = useState<PharmacyProduct[]>([]);
   const [batches, setBatches] = useState<PharmacyBatch[]>([]);
@@ -270,6 +271,7 @@ export function PharmacyPage({ companyId }: { companyId: string }) {
             <article className="ops-metric"><span className="ops-metric__label">A expirar em 90 dias</span><strong>{expiring.length}</strong></article>
           </section>
 
+          <VerticalWorkspacePanel id="stock" activeId={activeTab}>
           <section className="ops-card">
             <div className="ops-card-heading"><div><h2>Stock farmacêutico</h2><p>Saldo, lotes disponíveis e validade mais próxima.</p></div></div>
             <div className="ops-table-wrap"><table className="ops-table"><thead><tr><th>Medicamento</th><th>Stock</th><th>Lotes</th><th>Validade próxima</th><th>Controlo</th></tr></thead><tbody>
@@ -277,8 +279,10 @@ export function PharmacyPage({ companyId }: { companyId: string }) {
               {!stock.length && <tr><td className="ops-table-empty" colSpan={5}>Configure produtos e receba lotes para iniciar o stock farmacêutico.</td></tr>}
             </tbody></table></div>
           </section>
+          </VerticalWorkspacePanel>
 
-          <section className="ops-industry-grid">
+          <section className="ops-industry-grid" hidden={!['stock', 'batches'].includes(activeTab)}>
+            <VerticalWorkspacePanel id="stock" activeId={activeTab}>
             <form className="ops-card ops-form-grid" onSubmit={(event) => void configureProduct(event)}>
               <div className="ops-card-heading ops-field--wide"><div><h2>Configurar medicamento</h2><p>Escolha um produto de stock e adicione os dados farmacêuticos.</p></div></div>
               <label className="ops-field ops-field--wide"><span>Produto</span><select name="product_id" required defaultValue=""><option value="" disabled>Escolher produto</option>{unconfigured.map((product) => <option key={product.id} value={product.id}>{product.name} · {product.sku}</option>)}</select></label>
@@ -290,7 +294,8 @@ export function PharmacyPage({ companyId }: { companyId: string }) {
               <label className="ops-industry-primary"><input name="prescription_required" type="checkbox" /><span>Exige prescrição</span></label>
               <div className="ops-form-actions"><button className="button button--primary" type="submit" disabled={busy || !unconfigured.length}>Configurar produto</button></div>
             </form>
-
+            </VerticalWorkspacePanel>
+            <VerticalWorkspacePanel id="batches" activeId={activeTab}>
             <form className="ops-card ops-form-grid" onSubmit={(event) => void receiveBatch(event)}>
               <div className="ops-card-heading ops-field--wide"><div><h2>Receber lote</h2><p>A receção atualiza stock e regista a validade.</p></div></div>
               <label className="ops-field ops-field--wide"><span>Produto configurado</span><select name="product_id" required defaultValue=""><option value="" disabled>Escolher produto</option>{configured.map((product) => <option key={product.product_id} value={product.product_id}>{product.name} · {product.sku}</option>)}</select></label>
@@ -301,9 +306,11 @@ export function PharmacyPage({ companyId }: { companyId: string }) {
               <label className="ops-field"><span>Fornecedor</span><input name="supplier" maxLength={160} /></label>
               <div className="ops-form-actions"><button className="button button--primary" type="submit" disabled={busy || !configured.length}>Receber lote</button></div>
             </form>
+            </VerticalWorkspacePanel>
           </section>
 
-          <section className="ops-industry-grid">
+          <section className="ops-industry-grid" hidden={!['prescriptions', 'dispensing'].includes(activeTab)}>
+            <VerticalWorkspacePanel id="prescriptions" activeId={activeTab}>
             <form className="ops-card ops-form-grid" onSubmit={(event) => void createPrescription(event)}>
               <div className="ops-card-heading ops-field--wide"><div><h2>Nova prescrição</h2><p>Registe o paciente, médico e pelo menos um medicamento.</p></div></div>
               <label className="ops-field"><span>Paciente</span><input name="patient_name" required maxLength={160} /></label>
@@ -317,7 +324,8 @@ export function PharmacyPage({ companyId }: { companyId: string }) {
               <label className="ops-field ops-field--wide"><span>Posologia</span><input name="dosage" maxLength={500} placeholder="Ex.: 1 comprimido de 8 em 8 horas" /></label>
               <div className="ops-form-actions"><button className="button button--primary" type="submit" disabled={busy}>Registar prescrição</button></div>
             </form>
-
+            </VerticalWorkspacePanel>
+            <VerticalWorkspacePanel id="dispensing" activeId={activeTab}>
             <form className="ops-card ops-form-grid" onSubmit={(event) => void dispense(event)}>
               <div className="ops-card-heading ops-field--wide"><div><h2>Dispensar produto</h2><p>O sistema escolhe os lotes válidos por FEFO.</p></div></div>
               <label className="ops-field ops-field--wide"><span>Medicamento</span><select name="product_id" required defaultValue=""><option value="" disabled>Escolher produto</option>{configured.map((product) => <option key={product.product_id} value={product.product_id}>{product.name} · stock {product.stock_quantity}</option>)}</select></label>
@@ -327,23 +335,29 @@ export function PharmacyPage({ companyId }: { companyId: string }) {
               <label className="ops-field"><span>Pagamento</span><select name="payment_method">{paymentMethods.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
               <div className="ops-form-actions"><button className="button button--primary" type="submit" disabled={busy || !configured.length}>Concluir dispensa</button></div>
             </form>
+            </VerticalWorkspacePanel>
           </section>
 
-          <section className="ops-industry-grid">
+          <section className="ops-industry-grid" hidden={!['batches', 'prescriptions'].includes(activeTab)}>
+            <VerticalWorkspacePanel id="batches" activeId={activeTab}>
             <section className="ops-card"><div className="ops-card-heading"><div><h2>Lotes e validade</h2><p>{batches.length} lotes com saldo</p></div></div>
               <div className="ops-table-wrap"><table className="ops-table"><thead><tr><th>Produto/lote</th><th>Validade</th><th>Saldo</th><th>Fornecedor</th></tr></thead><tbody>
                 {batches.map((batch) => <tr key={batch.id}><td>{batch.product_name}<small>{batch.batch_number}</small></td><td>{batch.expiry_date}</td><td>{batch.quantity_remaining}</td><td>{batch.supplier_name || '—'}</td></tr>)}
                 {!batches.length && <tr><td className="ops-table-empty" colSpan={4}>Ainda não há lotes registados.</td></tr>}
               </tbody></table></div>
             </section>
+            </VerticalWorkspacePanel>
+            <VerticalWorkspacePanel id="prescriptions" activeId={activeTab}>
             <section className="ops-card"><div className="ops-card-heading"><div><h2>Prescrições</h2><p>{prescriptions.length} prescrições</p></div></div>
               <div className="ops-table-wrap"><table className="ops-table"><thead><tr><th>Número/paciente</th><th>Médico</th><th>Emitida</th><th>Estado</th></tr></thead><tbody>
                 {prescriptions.map((item) => <tr key={item.id}><td>#{item.number}<small>{item.patient_name}</small></td><td>{item.doctor_name}</td><td>{item.issued_on}</td><td>{item.status}</td></tr>)}
                 {!prescriptions.length && <tr><td className="ops-table-empty" colSpan={4}>Ainda não há prescrições.</td></tr>}
               </tbody></table></div>
             </section>
+            </VerticalWorkspacePanel>
           </section>
-          <section className="ops-industry-grid">
+          <section className="ops-industry-grid" hidden={activeTab !== 'dispensing'}>
+            <VerticalWorkspacePanel id="dispensing" activeId={activeTab}>
             <section className="ops-card"><div className="ops-card-heading"><div><h2>Dispensas recentes</h2><p>{dispenses.length} registos</p></div></div>
               <div className="ops-table-wrap"><table className="ops-table"><thead><tr><th>Dispensa</th><th>Paciente</th><th>Valor</th><th>Estado</th><th>Data</th></tr></thead><tbody>
                 {dispenses.map((item) => <tr key={item.id}><td>#{item.number}</td><td>{item.patient_name}</td><td>{money(item.total_cents)}</td><td>{item.status}</td><td>{dateTime(item.created_at)}</td></tr>)}
@@ -356,6 +370,7 @@ export function PharmacyPage({ companyId }: { companyId: string }) {
                 {!controlled.length && <tr><td className="ops-table-empty" colSpan={5}>Ainda não há dispensas de medicamentos controlados.</td></tr>}
               </tbody></table></div>
             </section>
+            </VerticalWorkspacePanel>
           </section>
           {!!expiring.length && <div className="ops-alert" role="status">{expiring.length} lote(s) expiram nos próximos 90 dias. Reveja a lista de lotes e priorize a dispensa.</div>}
         </>

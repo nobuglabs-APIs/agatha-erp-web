@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { NetworkError, request } from '../../api/client';
+import { mediaUrl, NetworkError, request } from '../../api/client';
 import { syncPendingSales } from '../../api/offlineSync';
 import {
   listenOfflineChanges,
@@ -31,6 +31,8 @@ export function SalesPage({ companyId }: { companyId: string }) {
   const [paymentMode, setPaymentMode] = useState<PaymentMode>('full');
   const [partialAmountInput, setPartialAmountInput] = useState('');
   const [productQuery, setProductQuery] = useState('');
+  const [customerQuery, setCustomerQuery] = useState('');
+  const [customerSearchOpen, setCustomerSearchOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -90,6 +92,21 @@ export function SalesPage({ companyId }: { companyId: string }) {
       ? parseAmountCents(partialAmountInput)
       : 0;
   const selectedCustomer = customers.find((customer) => customer.id === selectedCustomerId);
+  const filteredCustomers = useMemo(() => {
+    const query = customerQuery.trim().toLocaleLowerCase();
+    if (!query) return customers.slice(0, 6);
+    return customers.filter((customer) => [
+      customer.name,
+      customer.trade_name,
+      customer.nif,
+      customer.email,
+      customer.phone,
+      customer.address,
+      customer.province,
+      customer.country,
+      customer.customer_type,
+    ].some((value) => value?.toLocaleLowerCase().includes(query))).slice(0, 8);
+  }, [customerQuery, customers]);
   const canCheckout = cartEntries.length > 0
     && totalCents > 0
     && paidCents !== null
@@ -184,6 +201,8 @@ export function SalesPage({ companyId }: { companyId: string }) {
         setNotice('Venda guardada neste dispositivo. Valores, stock e documento fiscal serão confirmados pela API ao sincronizar.');
         setCart({});
         setSelectedCustomerId('');
+        setCustomerQuery('');
+        setCustomerSearchOpen(false);
         setPaymentMode('full');
         setPartialAmountInput('');
         await loadData();
@@ -195,6 +214,8 @@ export function SalesPage({ companyId }: { companyId: string }) {
         : `Venda #${sale.number} registada. Documento fiscal não retornado.`);
       setCart({});
       setSelectedCustomerId('');
+      setCustomerQuery('');
+      setCustomerSearchOpen(false);
       setPaymentMode('full');
       setPartialAmountInput('');
       if (sale.invoice_document_id) setSheetDocumentId(sale.invoice_document_id);
@@ -225,7 +246,13 @@ export function SalesPage({ companyId }: { companyId: string }) {
               {filteredProducts.map((product) => {
                 const unavailable = product.track_stock && product.stock_quantity <= 0;
                 return <button type="button" className="ops-pos-product" disabled={unavailable} key={product.id} onClick={() => addToCart(product)}>
-                  <span className="ops-pos-product__symbol">{product.name.slice(0, 1).toUpperCase()}<b>＋</b></span>
+                  <span className="ops-pos-product__image">
+                    {product.image_url
+                      ? <img src={mediaUrl(product.image_url)} alt="" onError={(event) => { event.currentTarget.hidden = true; }} />
+                      : null}
+                    <span>{product.name.slice(0, 1).toUpperCase()}</span>
+                    <b>＋</b>
+                  </span>
                   <strong>{product.name}</strong><small>{product.sku}{product.track_stock ? ` · ${product.stock_quantity} un.` : ''}</small>
                   <span className="ops-pos-product__price">{money(product.unit_price_cents)}</span>
                   {unavailable && <i className="ops-pos-product__unavailable">Sem stock</i>}
@@ -238,10 +265,100 @@ export function SalesPage({ companyId }: { companyId: string }) {
 
         <aside className="ops-card ops-pos-cart">
           <div className="ops-card-heading"><div><h2>Venda atual</h2><p>{cartEntries.reduce((sum, product) => sum + cart[product.id], 0)} artigos</p></div><button type="button" className="ops-text-button" onClick={() => setCart({})} disabled={!cartEntries.length}>Limpar</button></div>
-          <label className="ops-field"><span>Cliente</span><select value={selectedCustomerId} onChange={(event) => setSelectedCustomerId(event.target.value)}><option value="">Consumidor final</option>{customers.map((customer) => <option value={customer.id} key={customer.id}>{customer.trade_name || customer.name}{customer.nif ? ` · ${customer.nif}` : ''}</option>)}</select></label>
+          <div className="ops-pos-customer">
+            <label className="ops-field">
+              <span>Cliente</span>
+              <span className="ops-pos-customer__input">
+                <span aria-hidden="true">⌕</span>
+                <input
+                  type="search"
+                  role="combobox"
+                  aria-expanded={customerSearchOpen}
+                  aria-controls="ops-pos-customer-results"
+                  autoComplete="off"
+                  value={customerSearchOpen ? customerQuery : selectedCustomer ? (selectedCustomer.trade_name || selectedCustomer.name) : customerQuery}
+                  placeholder="Nome, NIF, telefone ou email"
+                  onFocus={() => setCustomerSearchOpen(true)}
+                  onChange={(event) => {
+                    setCustomerQuery(event.target.value);
+                    setCustomerSearchOpen(true);
+                  }}
+                  onBlur={() => window.setTimeout(() => setCustomerSearchOpen(false), 120)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Escape') setCustomerSearchOpen(false);
+                  }}
+                />
+                {selectedCustomerId && (
+                  <button
+                    type="button"
+                    aria-label="Remover cliente da venda"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => {
+                      setSelectedCustomerId('');
+                      setCustomerQuery('');
+                      setCustomerSearchOpen(false);
+                    }}
+                  >
+                    ×
+                  </button>
+                )}
+              </span>
+            </label>
+            {customerSearchOpen && (
+              <div className="ops-pos-customer__results" id="ops-pos-customer-results" role="listbox">
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={!selectedCustomerId}
+                  className={!selectedCustomerId ? 'ops-pos-customer__result ops-pos-customer__result--active' : 'ops-pos-customer__result'}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => {
+                    setSelectedCustomerId('');
+                    setCustomerQuery('');
+                    setCustomerSearchOpen(false);
+                  }}
+                >
+                  <span className="ops-pos-customer__avatar">CF</span>
+                  <span><strong>Consumidor final</strong><small>Venda sem identificação do cliente</small></span>
+                  {!selectedCustomerId && <b>✓</b>}
+                </button>
+                {filteredCustomers.map((customer) => (
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={selectedCustomerId === customer.id}
+                    className={selectedCustomerId === customer.id ? 'ops-pos-customer__result ops-pos-customer__result--active' : 'ops-pos-customer__result'}
+                    key={customer.id}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => {
+                      setSelectedCustomerId(customer.id);
+                      setCustomerQuery('');
+                      setCustomerSearchOpen(false);
+                    }}
+                  >
+                    <span className="ops-pos-customer__avatar">{(customer.trade_name || customer.name).slice(0, 1).toUpperCase()}</span>
+                    <span>
+                      <strong>{customer.trade_name || customer.name}</strong>
+                      <small>{[customer.nif, customer.phone, customer.email].filter(Boolean).join(' · ') || 'Cliente sem dados de contacto'}</small>
+                    </span>
+                    {selectedCustomerId === customer.id && <b>✓</b>}
+                  </button>
+                ))}
+                {!filteredCustomers.length && (
+                  <div className="ops-pos-customer__empty">Nenhum cliente corresponde à pesquisa.</div>
+                )}
+              </div>
+            )}
+          </div>
           <div className="ops-cart-lines">
             {cartEntries.map((product) => (
               <div className="ops-cart-line" key={product.id}>
+                <span className="ops-cart-line__image">
+                  {product.image_url
+                    ? <img src={mediaUrl(product.image_url)} alt="" onError={(event) => { event.currentTarget.hidden = true; }} />
+                    : null}
+                  <b>{product.name.slice(0, 1).toUpperCase()}</b>
+                </span>
                 <span className="ops-cart-line__info"><strong>{product.name}</strong><small>{money(product.unit_price_cents)} cada</small></span>
                 <span className="ops-quantity"><button type="button" onClick={() => changeQuantity(product.id, -1)} aria-label={`Remover uma unidade de ${product.name}`}>−</button><strong>{cart[product.id]}</strong><button type="button" disabled={product.track_stock && cart[product.id] >= product.stock_quantity} onClick={() => changeQuantity(product.id, 1)} aria-label={`Adicionar uma unidade de ${product.name}`}>＋</button></span>
               </div>

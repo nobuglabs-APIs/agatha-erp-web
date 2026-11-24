@@ -322,12 +322,15 @@ export function CompanyWorkspace({
         profile={profile}
         companyId={selectedCompanyId}
         companyName={company.trade_name || company.legal_name}
+        company={company}
         onLogout={onLogout}
         memberships={profile.companies}
         onCompanyChange={onCompanyChange}
-        defaultView={canManage && subscription?.status !== 'active' && subscription?.status !== 'trialing' ? 'billing' : 'overview'}
+        defaultView={canManage && subscription?.status !== 'active' && subscription?.status !== 'trialing' ? 'billing' : `industry:${businessType.code}`}
+        primaryVerticalCode={businessType.code}
         billingOnly={canManage && subscription?.status !== 'active' && subscription?.status !== 'trialing'}
         onSubscriptionChange={() => void loadCompany()}
+        onCompanyUpdated={(updated) => setCompany(updated)}
       />
     );
   }

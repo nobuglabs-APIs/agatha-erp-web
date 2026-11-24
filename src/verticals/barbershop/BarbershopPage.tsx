@@ -3,6 +3,7 @@ import { request } from '../../api/client';
 import type { Page } from '../../api/types';
 import type { Product } from '../../components/operations/shared';
 import { dateTime, getErrorMessage, money, listPage } from '../../components/operations/shared';
+import { VerticalWorkspacePanel } from '../VerticalWorkspacePanel';
 
 interface Professional {
   id: string;
@@ -61,7 +62,7 @@ function localDateTimeValue() {
   return date.toISOString().slice(0, 16);
 }
 
-export function BarbershopPage({ companyId }: { companyId: string }) {
+export function BarbershopPage({ companyId, activeTab }: { companyId: string; activeTab: string }) {
   const [professionals, setProfessionals] = useState<Professional[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [serviceProducts, setServiceProducts] = useState<Product[]>([]);
@@ -220,7 +221,8 @@ export function BarbershopPage({ companyId }: { companyId: string }) {
             <article className="ops-metric"><span className="ops-metric__label">Comissões acumuladas</span><strong>{money(commissions?.total_commission_cents || 0)}</strong><small>Base {money(commissions?.total_base_cents || 0)}</small></article>
           </section>
 
-          <section className="ops-industry-grid">
+          <section className="ops-industry-grid" hidden={!['professionals', 'services'].includes(activeTab)}>
+            <VerticalWorkspacePanel id="professionals" activeId={activeTab}>
             <form className="ops-card ops-form-grid" onSubmit={(event) => void createProfessional(event)}>
               <div className="ops-card-heading ops-field--wide"><div><h2>Adicionar profissional</h2><p>Defina a taxa de comissão sobre o serviço.</p></div></div>
               <label className="ops-field"><span>Nome</span><input name="name" required maxLength={120} /></label>
@@ -229,15 +231,18 @@ export function BarbershopPage({ companyId }: { companyId: string }) {
               <label className="ops-field"><span>Comissão (%)</span><input name="commission" type="number" min="0" max="100" step="0.01" defaultValue="0" /></label>
               <div className="ops-form-actions"><button className="button button--primary" type="submit" disabled={busy}>Adicionar</button></div>
             </form>
-
+            </VerticalWorkspacePanel>
+            <VerticalWorkspacePanel id="services" activeId={activeTab}>
             <form className="ops-card ops-form-grid" onSubmit={(event) => void createService(event)}>
               <div className="ops-card-heading ops-field--wide"><div><h2>Configurar serviço</h2><p>O serviço deve existir no catálogo como produto do tipo serviço.</p></div></div>
               <label className="ops-field ops-field--wide"><span>Produto/serviço</span><select name="product_id" required defaultValue=""><option value="" disabled>Escolher do catálogo</option>{serviceProducts.map((product) => <option key={product.id} value={product.id}>{product.name} · {money(product.unit_price_cents)}</option>)}</select></label>
               <label className="ops-field"><span>Duração (minutos)</span><input name="duration" type="number" min="1" max="480" defaultValue="30" required /></label>
               <div className="ops-form-actions"><button className="button button--primary" type="submit" disabled={busy || !serviceProducts.length}>Associar serviço</button></div>
             </form>
+            </VerticalWorkspacePanel>
           </section>
 
+          <VerticalWorkspacePanel id="appointments" activeId={activeTab}>
           <section className="ops-card">
             <div className="ops-card-heading"><div><h2>Nova marcação</h2><p>O sistema valida automaticamente conflitos de horário.</p></div></div>
             <form className="ops-form-grid" onSubmit={(event) => void createAppointment(event)}>
@@ -271,7 +276,9 @@ export function BarbershopPage({ companyId }: { companyId: string }) {
               {!appointments.length && <tr><td className="ops-table-empty" colSpan={6}>Ainda não há marcações.</td></tr>}
             </tbody></table></div>
           </section>
+          </VerticalWorkspacePanel>
 
+          <VerticalWorkspacePanel id="commissions" activeId={activeTab}>
           <section className="ops-card">
             <div className="ops-card-heading"><div><h2>Comissões</h2><p>Marcações concluídas e respectivas comissões.</p></div></div>
             <div className="ops-table-wrap"><table className="ops-table"><thead><tr><th>Marcação</th><th>Profissional</th><th>Serviço</th><th>Concluída</th><th>Comissão</th></tr></thead><tbody>
@@ -279,6 +286,7 @@ export function BarbershopPage({ companyId }: { companyId: string }) {
               {!commissions?.items.length && <tr><td className="ops-table-empty" colSpan={5}>Ainda não existem comissões calculadas.</td></tr>}
             </tbody></table></div>
           </section>
+          </VerticalWorkspacePanel>
         </>
       )}
     </div>

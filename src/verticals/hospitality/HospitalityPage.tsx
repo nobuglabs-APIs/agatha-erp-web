@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { request } from '../../api/client';
 import type { Page } from '../../api/types';
 import { dateTime, getErrorMessage, money } from '../../components/operations/shared';
+import { VerticalWorkspacePanel } from '../VerticalWorkspacePanel';
 
 interface Room {
   id: string;
@@ -62,7 +63,7 @@ function nextDay() {
   return localDate.toISOString().slice(0, 10);
 }
 
-export function HospitalityPage({ companyId }: { companyId: string }) {
+export function HospitalityPage({ companyId, activeTab }: { companyId: string; activeTab: string }) {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [availableRooms, setAvailableRooms] = useState<Room[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
@@ -294,6 +295,7 @@ export function HospitalityPage({ companyId }: { companyId: string }) {
             <article className="ops-metric"><span className="ops-metric__label">Tarefas pendentes</span><strong>{tasks.filter((task) => task.status === 'pending' || task.status === 'in_progress').length}</strong></article>
           </section>
 
+          <VerticalWorkspacePanel id="rooms" activeId={activeTab}>
           <section className="ops-card">
             <div className="ops-card-heading"><div><h2>Quartos</h2><p>Tarifas base e disponibilidade operacional.</p></div></div>
             <div className="ops-industry-actions">{rooms.map((room) => <article className="ops-industry-action" key={room.id}>
@@ -301,8 +303,10 @@ export function HospitalityPage({ companyId }: { companyId: string }) {
               {room.status !== 'occupied' && <button className="button button--secondary" type="button" disabled={busy} onClick={() => void toggleRoomMaintenance(room)}>{room.status === 'maintenance' ? 'Marcar disponível' : 'Enviar para manutenção'}</button>}
             </article>)}</div>
           </section>
+          </VerticalWorkspacePanel>
 
-          <section className="ops-industry-grid">
+          <section className="ops-industry-grid" hidden={!['rooms', 'reservations'].includes(activeTab)}>
+            <VerticalWorkspacePanel id="rooms" activeId={activeTab}>
             <form className="ops-card ops-form-grid" onSubmit={(event) => void createRoom(event)}>
               <div className="ops-card-heading ops-field--wide"><div><h2>Adicionar quarto</h2><p>Defina a capacidade e tarifa base por noite.</p></div></div>
               <label className="ops-field"><span>Código</span><input name="code" required maxLength={20} /></label>
@@ -312,7 +316,8 @@ export function HospitalityPage({ companyId }: { companyId: string }) {
               <label className="ops-field"><span>Tarifa por noite (Kz)</span><input name="rate" type="number" min="0" step="0.01" required /></label>
               <div className="ops-form-actions"><button className="button button--primary" type="submit" disabled={busy}>Adicionar quarto</button></div>
             </form>
-
+            </VerticalWorkspacePanel>
+            <VerticalWorkspacePanel id="reservations" activeId={activeTab}>
             <form className="ops-card ops-form-grid" onSubmit={(event) => void createReservation(event)}>
               <div className="ops-card-heading ops-field--wide"><div><h2>Nova reserva</h2><p>O total é calculado no servidor com tarifa do quarto e número de noites.</p></div></div>
               <label className="ops-field ops-field--wide"><span>Quarto disponível</span><select name="room_id" required defaultValue=""><option value="" disabled>{availableRooms.length ? 'Escolher quarto' : 'Sem disponibilidade para estas datas'}</option>{availableRooms.map((room) => <option key={room.id} value={room.id}>{room.code} · {room.name} · {money(room.base_rate_cents)}/noite</option>)}</select></label>
@@ -327,8 +332,10 @@ export function HospitalityPage({ companyId }: { companyId: string }) {
               {availabilityError && <small className="ops-form-help ops-field--wide">{availabilityError}</small>}
               <div className="ops-form-actions"><button className="button button--primary" type="submit" disabled={busy || !availableRooms.length || checkOutDate <= checkInDate}>Criar reserva</button></div>
             </form>
+            </VerticalWorkspacePanel>
           </section>
 
+          <VerticalWorkspacePanel id="reservations" activeId={activeTab}>
           <section className="ops-card">
             <div className="ops-card-heading"><div><h2>Reservas</h2><p>{reservations.length} registos</p></div>
               <label className="ops-field"><span>Meio de pagamento</span><select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value)}>{paymentMethods.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
@@ -356,7 +363,9 @@ export function HospitalityPage({ companyId }: { companyId: string }) {
               {!reservations.length && <tr><td className="ops-table-empty" colSpan={6}>Ainda não há reservas.</td></tr>}
             </tbody></table></div>
           </section>
+          </VerticalWorkspacePanel>
 
+          <VerticalWorkspacePanel id="housekeeping" activeId={activeTab}>
           <section className="ops-card">
             <div className="ops-card-heading"><div><h2>Housekeeping</h2><p>O check-out cria automaticamente uma tarefa de limpeza.</p></div></div>
             <div className="ops-industry-actions">{tasks.map((task) => <article className="ops-industry-action" key={task.id}>
@@ -365,6 +374,7 @@ export function HospitalityPage({ companyId }: { companyId: string }) {
             </article>)}</div>
             {!tasks.length && <p className="ops-form-help">Sem tarefas de housekeeping pendentes.</p>}
           </section>
+          </VerticalWorkspacePanel>
         </>
       )}
     </div>

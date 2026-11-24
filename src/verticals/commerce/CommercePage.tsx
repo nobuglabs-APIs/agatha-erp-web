@@ -3,6 +3,7 @@ import { request } from '../../api/client';
 import type { Page } from '../../api/types';
 import type { Sale } from '../../components/operations/shared';
 import { dateTime, getErrorMessage, listPage, money } from '../../components/operations/shared';
+import { VerticalWorkspacePanel } from '../VerticalWorkspacePanel';
 
 interface PosProduct {
   id: string;
@@ -59,7 +60,7 @@ const paymentMethods = [
   ['other', 'Outro'],
 ];
 
-export function CommercePage({ companyId }: { companyId: string }) {
+export function CommercePage({ companyId, activeTab }: { companyId: string; activeTab: string }) {
   const [products, setProducts] = useState<PosProduct[]>([]);
   const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
@@ -277,6 +278,7 @@ export function CommercePage({ companyId }: { companyId: string }) {
       {notice && <div className="ops-alert ops-alert--success" role="status">{notice}</div>}
       {loading ? <div className="ops-loading"><span className="loading-dot" />A carregar comércio…</div> : (
         <>
+          <VerticalWorkspacePanel id="pos" activeId={activeTab}>
           <section className="ops-pos-layout">
             <section className="ops-card">
               <div className="ops-table-toolbar"><div><h2>Produtos do POS</h2><p>{products.length} artigos encontrados</p></div><label className="ops-search ops-search--inline"><span>⌕</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Nome, SKU ou código" /></label></div>
@@ -298,8 +300,10 @@ export function CommercePage({ companyId }: { companyId: string }) {
               <button type="button" className="button button--primary" disabled={busy || totalCents <= 0 || insufficientStock || invalidPromotion || !Object.keys(cart).some((id) => cart[id] > 0)} onClick={() => void checkout()}>Concluir venda</button>
             </section>
           </section>
+          </VerticalWorkspacePanel>
 
-          <section className="ops-industry-grid">
+          <section className="ops-industry-grid" hidden={activeTab === 'pos'}>
+            <VerticalWorkspacePanel id="promotions" activeId={activeTab}>
             <form className="ops-card ops-form-grid" onSubmit={(event) => void createPromotion(event)}>
               <div className="ops-card-heading ops-field--wide"><div><h2>Criar promoção</h2><p>Desconto percentual com código e valor mínimo opcional.</p></div></div>
               <label className="ops-field"><span>Nome</span><input name="name" required maxLength={120} /></label>
@@ -309,7 +313,8 @@ export function CommercePage({ companyId }: { companyId: string }) {
               <label className="ops-field ops-field--wide"><span>Descrição</span><input name="description" maxLength={1000} /></label>
               <div className="ops-form-actions"><button className="button button--primary" type="submit" disabled={busy}>Criar promoção</button></div>
             </form>
-
+            </VerticalWorkspacePanel>
+            <VerticalWorkspacePanel id="returns" activeId={activeTab}>
             <form className="ops-card ops-form-grid" onSubmit={(event) => void createReturn(event)}>
               <div className="ops-card-heading ops-field--wide"><div><h2>Registar devolução</h2><p>Escolha uma venda paga e indique os artigos devolvidos.</p></div></div>
               <label className="ops-field ops-field--wide"><span>Venda</span><select value={saleForReturn?.id || ''} onChange={(event) => void selectSaleForReturn(event.target.value)}><option value="">Escolher venda</option>{sales.filter((sale) => sale.status === 'paid' && sale.refunded_cents < sale.paid_cents).map((sale) => <option key={sale.id} value={sale.id}>#{sale.number} · {dateTime(sale.created_at)} · {money(sale.total_cents)}</option>)}</select></label>
@@ -320,21 +325,26 @@ export function CommercePage({ companyId }: { companyId: string }) {
               <label className="ops-field"><span>Reembolso</span><select name="refund_method"><option value="">Sem reembolso</option>{paymentMethods.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
               <div className="ops-form-actions"><button className="button button--primary" type="submit" disabled={busy || !saleForReturn || !Object.values(returnQuantities).some((quantity) => quantity > 0)}>Confirmar devolução</button></div>
             </form>
+            </VerticalWorkspacePanel>
           </section>
 
-          <section className="ops-industry-grid">
+          <section className="ops-industry-grid" hidden={activeTab === 'pos'}>
+            <VerticalWorkspacePanel id="promotions" activeId={activeTab}>
             <section className="ops-card"><div className="ops-card-heading"><div><h2>Promoções</h2><p>{promotions.length} campanhas</p></div></div>
               <div className="ops-table-wrap"><table className="ops-table"><thead><tr><th>Campanha</th><th>Código</th><th>Desconto</th><th>Mínimo</th><th>Estado</th></tr></thead><tbody>
                 {promotions.map((item) => <tr key={item.id}><td>{item.name}</td><td>{item.code}</td><td>{item.discount_bp / 100}%</td><td>{money(item.min_total_cents)}</td><td>{item.is_active ? 'Ativa' : 'Inativa'}</td></tr>)}
                 {!promotions.length && <tr><td className="ops-table-empty" colSpan={5}>Ainda não há promoções.</td></tr>}
               </tbody></table></div>
             </section>
+            </VerticalWorkspacePanel>
+            <VerticalWorkspacePanel id="returns" activeId={activeTab}>
             <section className="ops-card"><div className="ops-card-heading"><div><h2>Devoluções recentes</h2><p>{returns.length} registos</p></div></div>
               <div className="ops-table-wrap"><table className="ops-table"><thead><tr><th>Número</th><th>Venda</th><th>Motivo</th><th>Reembolso</th><th>Data</th></tr></thead><tbody>
                 {returns.map((item) => <tr key={item.id}><td>{item.number}</td><td>{sales.find((sale) => sale.id === item.sale_id)?.number || '—'}</td><td>{item.reason}</td><td>{money(item.refund_cents)}</td><td>{dateTime(item.created_at)}</td></tr>)}
                 {!returns.length && <tr><td className="ops-table-empty" colSpan={5}>Ainda não há devoluções.</td></tr>}
               </tbody></table></div>
             </section>
+            </VerticalWorkspacePanel>
           </section>
         </>
       )}

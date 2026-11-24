@@ -4,14 +4,16 @@ import { Icon } from '../Icon';
 import type { Customer, Product, Sale, SalesSummary } from './shared';
 import { dateTime, getErrorMessage, listPage, money } from './shared';
 
-type View = 'overview' | 'sales' | 'products' | 'customers' | 'stock';
+type View = 'overview' | 'sales' | 'products' | 'customers' | 'stock' | 'receivables';
 
 export function DashboardPage({
   companyId,
   onNavigate,
+  userName,
 }: {
   companyId: string;
   onNavigate: (view: View) => void;
+  userName?: string;
 }) {
   const [summary, setSummary] = useState<SalesSummary | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
@@ -47,21 +49,53 @@ export function DashboardPage({
   }, [companyId]);
 
   const lowStock = products.filter((product) => product.track_stock && product.stock_quantity <= product.min_stock);
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Bom dia' : hour < 19 ? 'Boa tarde' : 'Boa noite';
+  const firstName = userName?.trim().split(/\s+/)[0] || '';
+  const today = new Date().toLocaleDateString('pt-AO', {
+    weekday: 'long',
+    day: '2-digit',
+    month: 'long',
+  });
 
   return (
     <div className="ops-page">
       <div className="ops-page-heading">
-        <div><span className="eyebrow">O SEU NEGÓCIO, NUM RELANCE</span><h1>Bom dia, vamos começar?</h1><p>Acompanhe o movimento da empresa e aceda rapidamente às tarefas do dia.</p></div>
+        <div>
+          <span className="eyebrow">{today}</span>
+          <h1>{greeting}{firstName ? `, ${firstName}` : ''}</h1>
+          <p>Acompanhe o movimento da empresa e aceda rapidamente às tarefas do dia.</p>
+        </div>
         <button className="button button--primary" type="button" onClick={() => onNavigate('sales')}><Icon name="plus" size={15} /> Nova venda</button>
       </div>
 
       {error && <div className="ops-alert ops-alert--warning" role="status">{error}</div>}
 
       <section className="ops-metric-grid">
-        <article className="ops-metric"><span className="ops-metric__top"><span className="ops-metric__icon ops-metric__icon--green"><Icon name="trend" size={15} /></span><small>ÚLTIMOS 30 DIAS</small></span><strong>{summary ? money(summary.total_cents) : reportUnavailable ? '—' : '…'}</strong><span className="ops-metric__label">Vendas totais</span><small className="ops-metric__hint">{summary ? `${summary.sales_count} vendas registadas` : 'Resumo de vendas'}</small></article>
-        <article className="ops-metric"><span className="ops-metric__top"><span className="ops-metric__icon ops-metric__icon--blue"><Icon name="package" size={15} /></span><small>CATÁLOGO ATIVO</small></span><strong>{products.length}</strong><span className="ops-metric__label">Produtos e serviços</span><small className="ops-metric__hint">{lowStock.length ? `${lowStock.length} com stock baixo` : 'Catálogo da empresa'}</small></article>
-        <article className="ops-metric"><span className="ops-metric__top"><span className="ops-metric__icon ops-metric__icon--amber"><Icon name="users" size={15} /></span><small>BASE DE CLIENTES</small></span><strong>{customers.length}</strong><span className="ops-metric__label">Clientes ativos</span><small className="ops-metric__hint">Pessoas e empresas</small></article>
-        <article className="ops-metric"><span className="ops-metric__top"><span className="ops-metric__icon ops-metric__icon--violet"><Icon name="clock" size={15} /></span><small>VALORES EM ABERTO</small></span><strong>{summary ? money(summary.outstanding_cents) : '—'}</strong><span className="ops-metric__label">Por receber</span><small className="ops-metric__hint">{summary ? `${summary.sales_count} vendas no período` : 'Disponível no relatório'}</small></article>
+        <button type="button" className="ops-metric ops-metric--button" onClick={() => onNavigate('sales')}>
+          <span className="ops-metric__top"><span className="ops-metric__icon ops-metric__icon--green"><Icon name="trend" size={15} /></span><small>ÚLTIMOS 30 DIAS</small></span>
+          <strong>{summary ? money(summary.total_cents) : reportUnavailable ? '—' : '…'}</strong>
+          <span className="ops-metric__label">Vendas totais</span>
+          <small className="ops-metric__hint">{summary ? `${summary.sales_count} vendas registadas` : 'Resumo de vendas'} <b>→</b></small>
+        </button>
+        <button type="button" className="ops-metric ops-metric--button" onClick={() => onNavigate('products')}>
+          <span className="ops-metric__top"><span className="ops-metric__icon ops-metric__icon--blue"><Icon name="package" size={15} /></span><small>CATÁLOGO ATIVO</small></span>
+          <strong>{products.length}</strong>
+          <span className="ops-metric__label">Produtos e serviços</span>
+          <small className="ops-metric__hint">{lowStock.length ? `${lowStock.length} com stock baixo` : 'Catálogo da empresa'} <b>→</b></small>
+        </button>
+        <button type="button" className="ops-metric ops-metric--button" onClick={() => onNavigate('customers')}>
+          <span className="ops-metric__top"><span className="ops-metric__icon ops-metric__icon--amber"><Icon name="users" size={15} /></span><small>BASE DE CLIENTES</small></span>
+          <strong>{customers.length}</strong>
+          <span className="ops-metric__label">Clientes ativos</span>
+          <small className="ops-metric__hint">Pessoas e empresas <b>→</b></small>
+        </button>
+        <button type="button" className="ops-metric ops-metric--button" onClick={() => onNavigate('receivables')}>
+          <span className="ops-metric__top"><span className="ops-metric__icon ops-metric__icon--violet"><Icon name="clock" size={15} /></span><small>VALORES EM ABERTO</small></span>
+          <strong>{summary ? money(summary.outstanding_cents) : '—'}</strong>
+          <span className="ops-metric__label">Por receber</span>
+          <small className="ops-metric__hint">{summary ? `${summary.sales_count} vendas no período` : 'Disponível no relatório'} <b>→</b></small>
+        </button>
       </section>
 
       <section className="ops-dashboard-grid">

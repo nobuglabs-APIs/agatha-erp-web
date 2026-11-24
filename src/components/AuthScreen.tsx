@@ -24,6 +24,13 @@ export function AuthScreen({
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [industryCode, setIndustryCode] = useState('');
+  const [registerStep, setRegisterStep] = useState<1 | 2 | 3>(1);
+  const [legalName, setLegalName] = useState('');
+  const [nif, setNif] = useState('');
+  const [companyEmail, setCompanyEmail] = useState('');
+  const [fullName, setFullName] = useState('');
+  const [adminEmail, setAdminEmail] = useState('');
+  const [adminPassword, setAdminPassword] = useState('');
   const [referralCode] = useState(() => {
     const code = new URLSearchParams(window.location.search).get('ref');
     return code?.trim().toUpperCase() || '';
@@ -31,9 +38,18 @@ export function AuthScreen({
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (mode === 'register' && registerStep < 3) {
+      if (!industryCode && registerStep === 1) {
+        setError('Escolha o tipo de negócio para continuar.');
+        return;
+      }
+      if (!event.currentTarget.reportValidity()) return;
+      setError('');
+      setRegisterStep((registerStep + 1) as 2 | 3);
+      return;
+    }
     setBusy(true);
     setError('');
-    const data = new FormData(event.currentTarget);
     try {
       if (mode === 'login') {
         const tokens = await request<TokenResponse>('/auth/login', {
@@ -47,13 +63,13 @@ export function AuthScreen({
           return;
         }
         const company: CompanyInput = {
-          legal_name: String(data.get('legal_name') || '').trim(),
+          legal_name: legalName.trim(),
           trade_name: null,
-          nif: String(data.get('nif') || '').trim(),
+          nif: nif.trim(),
           legal_form: null,
           registration_number: null,
           incorporation_date: null,
-          email: String(data.get('company_email') || '').trim(),
+          email: companyEmail.trim(),
           phone: null,
           address: null,
           city: null,
@@ -69,9 +85,9 @@ export function AuthScreen({
             industry_code: industryCode,
             ...(referralCode ? { referral_code: referralCode } : {}),
             admin: {
-              full_name: String(data.get('full_name') || '').trim(),
-              email: String(data.get('admin_email') || '').trim(),
-              password: String(data.get('admin_password') || ''),
+              full_name: fullName.trim(),
+              email: adminEmail.trim(),
+              password: adminPassword,
             },
           },
         });
@@ -121,8 +137,12 @@ export function AuthScreen({
           <div className="auth-mobile-brand"><Brand /></div>
           <div className="auth-heading">
             <span className="eyebrow">{mode === 'login' ? 'BEM-VINDO DE VOLTA' : 'COMECE AQUI'}</span>
-            <h2>{mode === 'login' ? 'Entre na sua conta' : 'Registe a sua empresa'}</h2>
-            <p>{mode === 'login' ? 'Aceda ao seu espaço Ágata ERP.' : 'Crie a conta de administrador e inicie o onboarding.'}</p>
+            <h2>{mode === 'login'
+              ? 'Entre na sua conta'
+              : ['Escolha o seu negócio', 'Dados da empresa', 'Crie o seu acesso'][registerStep - 1]}</h2>
+            <p>{mode === 'login'
+              ? 'Aceda ao seu espaço Ágata ERP.'
+              : ['Defina como a Ágata irá organizar o seu espaço.', 'Informe os dados identificativos da empresa.', 'Use estes dados para entrar e administrar o primeiro espaço.'][registerStep - 1]}</p>
           </div>
 
           <form className="auth-form" key={mode} onSubmit={submit}>
@@ -139,68 +159,117 @@ export function AuthScreen({
               </>
             ) : (
               <>
-                <fieldset className="business-type-fieldset">
-                  <legend>Qual é o tipo de negócio?</legend>
-                  <p>Este espaço será configurado para esta atividade e não poderá ser alterado depois.</p>
-                  <div className="business-type-grid">
-                    {verticalRegistry.map((type) => (
-                      <label className={industryCode === type.code ? 'business-type-card business-type-card--selected' : 'business-type-card'} key={type.code}>
-                        <input
-                          type="radio"
-                          name="industry_code"
-                          value={type.code}
-                          required
-                          checked={industryCode === type.code}
-                          onChange={() => setIndustryCode(type.code)}
-                        />
-                        <span className="business-type-card__icon" aria-hidden="true"><Icon name={type.icon} size={17} /></span>
-                        <span className="business-type-card__copy"><strong>{type.name}</strong><small>{type.description}</small></span>
-                        <span className="business-type-card__check" aria-hidden="true">✓</span>
-                      </label>
-                    ))}
-                  </div>
-                </fieldset>
-                {referralCode && <p className="field-hint">Indicação Nobug Rewards aplicada: <strong>{referralCode}</strong></p>}
-                <label className="field">
-                  <span>Nome legal da empresa</span>
-                  <input name="legal_name" required minLength={2} maxLength={200} placeholder="Ex.: Empresa, Lda." />
-                </label>
-                <div className="field-row">
-                  <label className="field">
-                    <span>NIF da empresa</span>
-                    <input name="nif" required inputMode="numeric" pattern="[0-9]{10}" maxLength={10} placeholder="10 dígitos" />
-                  </label>
-                  <label className="field">
-                    <span>Email da empresa</span>
-                    <input name="company_email" required type="email" placeholder="geral@empresa.ao" />
-                  </label>
+                <div className="auth-stepper" aria-label="Etapas do cadastro">
+                  {[['Negócio', 1], ['Empresa', 2], ['Acesso', 3]].map(([label, step]) => {
+                    const stepNumber = Number(step);
+                    return (
+                      <div
+                        className={`auth-step${registerStep === stepNumber ? ' auth-step--active' : ''}${registerStep > stepNumber ? ' auth-step--done' : ''}`}
+                        key={label}
+                      >
+                        <span>{registerStep > stepNumber ? '✓' : stepNumber}</span>
+                        <small>{label}</small>
+                      </div>
+                    );
+                  })}
                 </div>
-                <label className="field">
-                  <span>Nome do administrador</span>
-                  <input name="full_name" required minLength={2} maxLength={200} placeholder="O seu nome" />
-                </label>
-                <label className="field">
-                  <span>Email de acesso</span>
-                  <input name="admin_email" required type="email" autoComplete="email" placeholder="nome@empresa.ao" />
-                </label>
-                <label className="field">
-                  <span>Palavra-passe</span>
-                  <input name="admin_password" required type="password" minLength={10} maxLength={128} autoComplete="new-password" placeholder="Pelo menos 10 caracteres" />
-                </label>
-                <p className="field-hint">Após a aprovação, terá 7 dias grátis para usar o ERP completo deste tipo de negócio e escolher um plano.</p>
+
+                {registerStep === 1 && (
+                  <fieldset className="business-type-fieldset">
+                    <legend>Qual é o tipo de negócio?</legend>
+                    <p>Este espaço será configurado para esta atividade e não poderá ser alterado depois.</p>
+                    <div className="business-type-grid">
+                      {verticalRegistry.map((type) => (
+                        <label className={industryCode === type.code ? 'business-type-card business-type-card--selected' : 'business-type-card'} key={type.code}>
+                          <input
+                            type="radio"
+                            name="industry_code"
+                            value={type.code}
+                            required
+                            checked={industryCode === type.code}
+                            onChange={() => setIndustryCode(type.code)}
+                          />
+                          <span className="business-type-card__icon" aria-hidden="true"><Icon name={type.icon} size={17} /></span>
+                          <span className="business-type-card__copy"><strong>{type.name}</strong><small>{type.description}</small></span>
+                          <span className="business-type-card__check" aria-hidden="true">✓</span>
+                        </label>
+                      ))}
+                    </div>
+                  </fieldset>
+                )}
+
+                {registerStep === 2 && (
+                  <>
+                    {referralCode && <p className="field-hint">Indicação Nobug Rewards aplicada: <strong>{referralCode}</strong></p>}
+                    <label className="field">
+                      <span>Nome legal da empresa</span>
+                      <input name="legal_name" required minLength={2} maxLength={200} value={legalName} onChange={(event) => setLegalName(event.target.value)} placeholder="Ex.: Empresa, Lda." />
+                    </label>
+                    <div className="field-row">
+                      <label className="field">
+                        <span>NIF da empresa</span>
+                        <input name="nif" required inputMode="numeric" pattern="[0-9]{10}" maxLength={10} value={nif} onChange={(event) => setNif(event.target.value)} placeholder="10 dígitos" />
+                      </label>
+                      <label className="field">
+                        <span>Email da empresa</span>
+                        <input name="company_email" required type="email" value={companyEmail} onChange={(event) => setCompanyEmail(event.target.value)} placeholder="geral@empresa.ao" />
+                      </label>
+                    </div>
+                  </>
+                )}
+
+                {registerStep === 3 && (
+                  <>
+                    <label className="field">
+                      <span>Nome do administrador</span>
+                      <input name="full_name" required minLength={2} maxLength={200} value={fullName} onChange={(event) => setFullName(event.target.value)} placeholder="O seu nome" />
+                    </label>
+                    <label className="field">
+                      <span>Email de acesso</span>
+                      <input name="admin_email" required type="email" autoComplete="email" value={adminEmail} onChange={(event) => setAdminEmail(event.target.value)} placeholder="nome@empresa.ao" />
+                    </label>
+                    <label className="field">
+                      <span>Palavra-passe</span>
+                      <input name="admin_password" required type="password" minLength={10} maxLength={128} autoComplete="new-password" value={adminPassword} onChange={(event) => setAdminPassword(event.target.value)} placeholder="Pelo menos 10 caracteres" />
+                    </label>
+                    <p className="field-hint">Após a aprovação, terá 7 dias grátis para usar o ERP completo deste tipo de negócio e escolher um plano.</p>
+                  </>
+                )}
               </>
             )}
 
             {error && <div className="alert alert--error" role="alert">{error}</div>}
-            <button className="button button--primary button--large" type="submit" disabled={busy}>
-              {busy ? 'A processar…' : mode === 'login' ? 'Entrar na Ágata' : 'Criar conta e empresa'}
-              <span aria-hidden="true">→</span>
-            </button>
+            <div className={mode === 'register' ? 'auth-form-actions auth-form-actions--register' : 'auth-form-actions'}>
+              {mode === 'register' && registerStep > 1 && (
+                <button
+                  className="button button--quiet button--large"
+                  type="button"
+                  disabled={busy}
+                  onClick={() => { setError(''); setRegisterStep((registerStep - 1) as 1 | 2); }}
+                >
+                  Voltar
+                </button>
+              )}
+              <button className="button button--primary button--large" type="submit" disabled={busy}>
+                {busy
+                  ? 'A processar…'
+                  : mode === 'login'
+                    ? 'Entrar na Ágata'
+                    : registerStep < 3
+                      ? 'Continuar'
+                      : 'Criar conta e empresa'}
+                <span aria-hidden="true">→</span>
+              </button>
+            </div>
           </form>
 
           <div className="auth-switch">
             <span>{mode === 'login' ? 'Ainda não tem uma conta?' : 'Já tem uma conta?'}</span>
-            <button type="button" onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setError(''); }}>
+            <button type="button" onClick={() => {
+              setMode(mode === 'login' ? 'register' : 'login');
+              setRegisterStep(1);
+              setError('');
+            }}>
               {mode === 'login' ? 'Registar empresa' : 'Iniciar sessão'}
             </button>
           </div>

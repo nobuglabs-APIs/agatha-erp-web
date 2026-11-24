@@ -6,6 +6,8 @@ export interface Table {
   name: string | null;
   area: string | null;
   seats: number;
+  position_x: number;
+  position_y: number;
   status: string;
 }
 
