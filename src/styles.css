@@ -2121,7 +2121,7 @@ img { max-width: 100%; }
 
 /* ------------------------------------------------------------- painel/ticket */
 
-.rs-sheet-layer { position: fixed; inset: 0; z-index: 60; display: flex; justify-content: flex-end; }
+.rs-sheet-layer { position: fixed; inset: 0; z-index: 120; display: flex; justify-content: flex-end; }
 .rs-sheet-backdrop { position: absolute; inset: 0; border: 0; background: rgb(8 5 3 / 62%); backdrop-filter: blur(2px); }
 .rs-sheet {
   position: relative;
