@@ -120,7 +120,7 @@ export function HospitalityPage({ companyId, activeTab }: { companyId: string; a
       }
     });
     return () => { active = false; };
-  }, [checkInDate, checkOutDate, guestCount, childCount, companyId]);
+  }, [checkInDate, checkOutDate, guestCount, childCount, companyId, rooms, reservations]);
 
   async function createRoom(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
