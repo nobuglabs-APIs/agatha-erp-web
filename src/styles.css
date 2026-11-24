@@ -2193,6 +2193,7 @@ img { max-width: 100%; }
 }
 
 @media (max-width: 720px) {
+  body.rs-order-sheet-open .ops-mobile-nav { display: none; }
   .rs { padding: 14px; border-radius: 18px; }
   .rs-stats { justify-content: flex-start; }
   .rs-stat { min-width: 84px; padding: 8px 10px; }

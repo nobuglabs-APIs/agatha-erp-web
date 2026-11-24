@@ -1,4 +1,5 @@
 import type { Tab } from './types';
+import { useEffect } from 'react';
 import { money } from '../../components/operations/shared';
 import { RestaurantPanels } from './RestaurantPanels';
 import { RestaurantOrderSheet } from './RestaurantOrderSheet';
@@ -29,6 +30,12 @@ export function RestaurantPage({
     addTotal, tableLabel, balance, dueNow, canAddItems, action, createOrder,
     addItems, createSplits, chargeAndClose, cancelOrder,
   } = useRestaurantWorkspace(companyId, tab, (nextTab) => onSelectTab(nextTab));
+
+  useEffect(() => {
+    document.body.classList.toggle('rs-order-sheet-open', sheet.kind !== 'none');
+    return () => document.body.classList.remove('rs-order-sheet-open');
+  }, [sheet.kind]);
+
   return (
     <div className="rs">
       <header className="rs-head">
