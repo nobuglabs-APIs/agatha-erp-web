@@ -2121,7 +2121,7 @@ img { max-width: 100%; }
 
 /* ------------------------------------------------------------- painel/ticket */
 
-.rs-sheet-layer { position: fixed; inset: 0; z-index: 120; display: flex; justify-content: flex-end; }
+.rs-sheet-layer { position: fixed; inset: 0; z-index: 300; display: flex; justify-content: flex-end; }
 .rs-sheet-backdrop { position: absolute; inset: 0; border: 0; background: rgb(8 5 3 / 62%); backdrop-filter: blur(2px); }
 .rs-sheet {
   position: relative;
@@ -2196,7 +2196,9 @@ img { max-width: 100%; }
   .rs { padding: 14px; border-radius: 18px; }
   .rs-stats { justify-content: flex-start; }
   .rs-stat { min-width: 84px; padding: 8px 10px; }
+  .rs-sheet-layer { inset: 0 0 calc(62px + env(safe-area-inset-bottom)); }
   .rs-sheet { width: 100%; }
+  .rs-sheet__foot { position: sticky; bottom: 0; z-index: 2; }
   .rs-form { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
   .rs-form .rs-btn { grid-column: 1 / -1; }
 }
